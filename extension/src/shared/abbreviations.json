@@ -158,5 +158,9 @@
   "list_markers": {
     "digits_at_start": true,
     "single_letter_at_start": true
+  },
+  "_terminators": "An ellipsis followed by a lowercase word does not end a sentence. 'Wait… what happened?' is one sentence with a trailing-off in it, and splitting it produces two utterances with a sentence-final drop in the middle of a thought. The evidence is the same one both engines already consult for abbreviations that could end a sentence: does what follows look like the start of a new one. This became worth fixing rather than recording when repeated_punctuation started producing U+2026 for every authored '...', which moved the case from rare to every document. DELIBERATELY NOT GENERALISED to the plain period, though the same argument appears to apply. A period followed by a lowercase word is usually not a boundary in edited prose, but informal all-lowercase writing is real content for a reader — chat logs, forum posts, notes — and there the rule would swallow every boundary in the piece and read it as one utterance with no pauses in it. The ellipsis has no such counterexample: an ellipsis before a lowercase word is a trailing-off essentially every time.",
+  "terminators": {
+    "ellipsis_before_lowercase_is_not_a_boundary": true
   }
 }

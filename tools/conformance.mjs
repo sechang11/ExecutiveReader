@@ -151,24 +151,19 @@ else {
  * something no longer true.
  */
 const KNOWN = new Map([
-  // The ellipsis rule, mid-migration, and the second time this map has held a
-  // half-landed shared change rather than a disagreement. That is what it is
-  // for: the previous pair — bracketed footnote markers — went stale the
-  // moment the desktop half moved its removal into the compared stage, which
-  // is the harness working rather than a gap in it.
+  // Empty on purpose, and worth keeping rather than deleting.
   //
-  // `_collapse_rules.repeated_punctuation` now says a run of exactly three
-  // periods becomes U+2026 rather than a period. Measured on five sentences on
-  // Microsoft David, collapsing to a period costs about half a second of extra
-  // pause every time, turning an authored trailing-off into a firmer stop.
-  // That voice cannot tell "..." from U+2026 at all, so the gain is from no
-  // longer collapsing rather than from the character; U+2026 is the target
-  // because Kokoro has a real token for it and is indifferent either way.
+  // It has now held two migrations, bracketed footnote markers and the
+  // three-period ellipsis, and both went stale within minutes of the second
+  // half landing. That is the whole value of the staleness check: an entry
+  // parked here cannot be forgotten, because finishing the work breaks the
+  // build until the record of the gap is removed.
   //
-  // These go stale when the Python side lands, which is one line in its
-  // _SAME_TERMINATOR handling.
-  ['collapse :: Wait... what?', { python: 'Wait. what?', js: 'Wait… what?' }],
-  ['full :: Wait... what?', { python: 'Wait. what?', js: 'Wait… what?' }],
+  // The footnote one is the lesson worth keeping. The desktop half removed
+  // those markers further along normalize() than any compared stage reached,
+  // so both halves could write the disagreement down, escalate it, and still
+  // have no tooling able to see it. A behaviour outside every compared stage
+  // is not covered by a passing harness, however many stages pass.
 ]);
 
 const squash = (s) => s.replace(/\s+/g, ' ').trim();

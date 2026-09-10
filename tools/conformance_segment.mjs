@@ -52,6 +52,12 @@ const CASES = [
   ['two sentences', 'One two. Three four.'],
   ['question and exclamation', 'Really?! I had no idea.'],
   ['ellipsis mid sentence', 'Wait... what happened?'],
+  // The other side of the ellipsis rule. Without this the corpus cannot tell
+  // an implementation that checks what follows from one that suppresses the
+  // boundary unconditionally — a mutation to that effect passed the whole
+  // harness while the unit tests caught it.
+  ['ellipsis before a capital', 'That was the end... The next began.'],
+  ['ellipsis at the very end', 'It ended...'],
   ['quote before the break', 'She said "Stop." Then she left.'],
   ['bracket closes the sentence', 'He left (finally). We all cheered.'],
 
@@ -163,24 +169,19 @@ const KNOWN = new Map([
   // stage is covered by conformance.mjs, which stops at symbols, currency and
   // expansions. The desktop half collapses a run of periods and reads a link
   // as its domain; the extension does neither.
-  // Two things at once until the Python side lands the ellipsis rule. The
-  // shared rule now says a run of exactly three periods becomes U+2026 rather
-  // than a period, measured: on the default Windows voice, collapsing to a
-  // period adds about half a second of pause to every authored trailing-off.
-  // Only the extension implements that so far, so the text still differs.
-  // What is left is narrower, and purely segmentation. A period followed by a
-  // LOWERCASE word is not a sentence end in ordinary prose, and the desktop
-  // half declines to split there. This half consults that evidence only for
-  // tokens it already classes as possible abbreviations, so an ordinary period
-  // splits regardless of what follows.
+  // Resolved rather than recorded. `terminators` in shared/abbreviations.json
+  // now says an ellipsis followed by a lowercase word is not a boundary, and
+  // both halves implement it, so "Wait… what happened?" is one segment on each.
   //
-  // Neither behaviour is obviously wrong, and outside a collapsed ellipsis the
-  // case is rare, which is why it is recorded rather than chased. Resolving it
-  // means one rule in both engines, like the ordinal-marker rule.
-  ['ellipsis mid sentence', {
-    python: ['Wait. what happened?'],
-    js: ['Wait…', 'what happened?'],
-  }],
+  // Deliberately NOT generalised to the plain period, which is the wider rule
+  // the desktop half's segmenter applies. The argument looks identical, but
+  // informal all-lowercase writing — chat logs, forum posts, notes — is real
+  // content for a reader, and the general rule swallows every boundary in the
+  // piece and reads it as one utterance with no pauses. The ellipsis has no
+  // such counterexample.
+  //
+  // The plain-period difference therefore remains, and remains unrecorded here
+  // because no case in this corpus reaches it any more.
   ['url with dots', {
     python: ['Visit link to example.com for more.', 'Then leave.'],
     js: ['Visit https://example.com/a.b for more.', 'Then leave.'],

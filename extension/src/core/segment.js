@@ -47,11 +47,17 @@ const NEVER_GROUPS = new Set(['titles', 'military']);
 let LIST_DIGITS_AT_START = false;
 let LIST_LETTER_AT_START = false;
 
+/** See `_terminators` in shared/abbreviations.json. */
+let ELLIPSIS_BEFORE_LOWER_NOT_BOUNDARY = false;
+
 /** @param {Record<string, unknown>} data parsed shared/abbreviations.json */
 export function loadAbbreviations(data) {
   const markers = /** @type {any} */ (data.list_markers) ?? {};
   LIST_DIGITS_AT_START = Boolean(markers.digits_at_start);
   LIST_LETTER_AT_START = Boolean(markers.single_letter_at_start);
+  ELLIPSIS_BEFORE_LOWER_NOT_BOUNDARY = Boolean(
+    /** @type {any} */ (data.terminators)?.ellipsis_before_lowercase_is_not_a_boundary,
+  );
   const never = new Set();
   const maybe = new Set();
   for (const [key, list] of Object.entries(data)) {
@@ -155,6 +161,17 @@ export function segment(text, opts = {}) {
       // follows actually looks like a new one.
       if (kind === 'maybe' && !startsNewSentence(text, i + 1)) continue;
     }
+
+    // "Wait… what happened?" is one sentence with a trailing-off in it.
+    // Splitting it gives two utterances with a sentence-final drop in the
+    // middle of a thought. Same evidence as the abbreviation case above.
+    //
+    // Not generalised to the plain period, though the argument looks the same:
+    // informal all-lowercase writing is real content for a reader, and there
+    // the general rule swallows every boundary in the piece. See
+    // `_terminators` in shared/abbreviations.json.
+    if (ch === '…' && ELLIPSIS_BEFORE_LOWER_NOT_BOUNDARY
+        && !startsNewSentence(text, i + 1)) continue;
 
     // Absorb runs of terminators ("?!") and any closing quotes or brackets.
     let end = i + 1;

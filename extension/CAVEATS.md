@@ -553,7 +553,30 @@ It could not show up in the finished text, because `tidy()` runs at the end of
 the pipeline and collapses the double space. Only a stage-by-stage comparison
 could see it — which is the mirror of the lesson that arrived in the same round
 from the other direction, that a stage compared in isolation is not the
-pipeline. **Both comparisons are needed, and each hides what the other finds.**
+pipeline.
+
+A third case arrived immediately after, from the desktop half, and completes the
+set. Its `apply_collapse` correctly returned `Wait… what happened?`, every unit
+test passed, and all 510 cross-language comparisons were identical. Then it timed
+the finished sentence on a real voice and the number had not moved from the
+collapse-to-a-period figure: NFKC, running later, decomposes U+2026 straight back
+into three periods, and the repeat rule turns those into one. The authored
+trailing-off was being restored and destroyed inside a single function.
+
+The stage comparison could not see it because the stage was right. The
+end-to-end comparison could not see it because both halves were wrong the same
+way. Only timing the output on an engine could.
+
+**Three checks, each blind to what the other two find:**
+
+| check | catches | misses |
+|---|---|---|
+| stage by stage | differences a later stage normalises away | a stage that is right in a pipeline that is not |
+| end to end | ordering damage between correct stages | anything both halves get wrong identically |
+| measured on an engine | a rule that produces no audible change | nothing here, and it is the slow one |
+
+Neither of the first two substitutes for the third, and the third is the one
+that gets skipped because it needs audio.
 
 The rule text now spells out that the separators are between the dots. That
 sentence exists because one character of ambiguity produced two implementations.
@@ -571,3 +594,30 @@ was missing. The general point stands: **the mutation-testing pattern used
 throughout this file — write a mutation, run, write the original back — must
 restore from the string it captured, never from the index.** The working tree is
 where the uncommitted work is.
+
+## 31. Reasoning that expires when a rule lands
+
+The ellipsis split — `Wait… what happened?` becoming two segments here and one
+on the desktop half — was recorded as a known divergence with the reasoning
+"outside a collapsed ellipsis the case is rare, which is why it is recorded
+rather than chased".
+
+That was true when it was written and false a day later. Landing the rule that
+turns every authored `...` into U+2026 moved the case from rare to *every
+document with a trailing-off in it*, and nothing connected the two: the entry
+still read as a considered decision, and the change that invalidated it was in a
+different file.
+
+A recorded divergence carries a judgement about how much it matters, and that
+judgement has dependencies the entry does not name. **The staleness check catches
+an entry whose behaviour changed; nothing catches an entry whose reasoning
+changed.** The only thing that caught this one was the other half re-reading the
+sentence while landing an unrelated rule.
+
+The rule is now implemented rather than recorded: `terminators` in
+`shared/abbreviations.json`. It is deliberately not generalised to the plain
+period, which is the wider rule the desktop half applies. The argument looks
+identical, but informal all-lowercase writing — chat logs, forum posts, notes —
+is real content for a reader, and there the general rule swallows every boundary
+in the piece and reads it as one utterance with no pauses in it. The ellipsis has
+no such counterexample.

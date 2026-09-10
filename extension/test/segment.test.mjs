@@ -134,3 +134,41 @@ test('a marker only counts at the start, so it cannot fire mid-sentence', () => 
 test('initials still work, and outrank nothing they used to', () => {
   assert.deepEqual(texts('J. R. R. Tolkien wrote it.'), ['J. R. R. Tolkien wrote it.']);
 });
+
+/**
+ * The ellipsis boundary.
+ *
+ * "Wait… what happened?" is one sentence with a trailing-off in it. Splitting
+ * it gives two utterances with a sentence-final drop in the middle of a
+ * thought. The evidence is the one both engines already consult for
+ * abbreviations: does what follows look like the start of a new sentence.
+ *
+ * This became worth fixing when the collapse rules started producing U+2026
+ * for every authored "...", which moved the case from rare to every document.
+ */
+test('an ellipsis before a lowercase word is not a boundary', () => {
+  assert.deepEqual(texts('Wait… what happened?'), ['Wait… what happened?']);
+  assert.deepEqual(texts('He trailed off… and stopped.'), ['He trailed off… and stopped.']);
+});
+
+test('an ellipsis before a capital still is', () => {
+  assert.deepEqual(
+    texts('That was the end… The next began.'),
+    ['That was the end…', 'The next began.'],
+  );
+});
+
+test('an ellipsis at the very end still closes the sentence', () => {
+  assert.deepEqual(texts('It ended…'), ['It ended…']);
+});
+
+test('the rule is not generalised to the plain period', () => {
+  // The same argument appears to apply and is deliberately refused. Informal
+  // all-lowercase writing is real content for a reader, and a general
+  // lowercase rule would swallow every boundary in the piece and read it as
+  // one utterance with no pauses. The ellipsis has no such counterexample.
+  assert.deepEqual(
+    texts('i went home. then i slept. it was late.'),
+    ['i went home.', 'then i slept.', 'it was late.'],
+  );
+});
