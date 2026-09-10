@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Earmark settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+<main>
+  <h1>Earmark settings</h1>
+  <p class="lede">Everything here stays on this device. Nothing you read is sent anywhere.</p>
+
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+
+  <section aria-labelledby="h-voice">
+    <h2 id="h-voice">Voice</h2>
+
+    <div class="field">
+      <label for="voice">Voice</label>
+      <select id="voice"></select>
+      <p class="hint" id="voice-hint"></p>
+    </div>
+
+    <div class="field">
+      <label for="speed">Reading speed <output id="speed-out">1.00&times;</output></label>
+      <input id="speed" type="range" min="0.5" max="4" step="0.05" value="1">
+      <p class="hint">
+        Speed is applied when the voice is generated, not by playing faster, so
+        the pitch stays natural.
+      </p>
+    </div>
+
+    <div class="field" id="neural">
+      <h3>Natural voices</h3>
+      <p class="hint" id="neural-state">Checking…</p>
+      <div class="row">
+        <button id="download" type="button" class="primary" hidden>Download voice model</button>
+        <button id="evict" type="button" hidden>Remove downloaded voices</button>
+      </div>
+      <div id="progress-wrap" hidden>
+        <progress id="progress" max="100" value="0" aria-describedby="progress-text"></progress>
+        <p class="hint" id="progress-text" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-reading">
+    <h2 id="h-reading">Reading</h2>
+
+    <label class="toggle">
+      <input id="auto-advance" type="checkbox">
+      <span>
+        Continue onto the next page
+        <em>Off by default. A link we are not confident about will ask first.</em>
+      </span>
+    </label>
+
+    <div class="field">
+      <label for="code">Code blocks</label>
+      <select id="code">
+        <option value="announce">Say how many lines, then skip</option>
+        <option value="read">Read the code out</option>
+        <option value="skip">Skip silently</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="urls">Links</label>
+      <select id="urls">
+        <option value="domain">Read the site name only</option>
+        <option value="full">Read the whole address</option>
+        <option value="skip">Say &ldquo;link&rdquo;</option>
+      </select>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-look">
+    <h2 id="h-look">Highlighting</h2>
+    <p class="hint">
+      Colours apply to the text highlighted on the page as it is read. The
+      defaults meet contrast requirements against both light and dark pages, and
+      the spoken word is underlined as well as filled so the cue never depends on
+      colour alone.
+    </p>
+
+    <div class="row">
+      <div class="field">
+        <label for="sentence-colour">Current sentence</label>
+        <input id="sentence-colour" type="color" value="#ffd666">
+      </div>
+      <div class="field">
+        <label for="word-colour">Current word</label>
+        <input id="word-colour" type="color" value="#ffa726">
+      </div>
+      <div class="field self-end">
+        <button id="reset-colours" type="button">Reset to defaults</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-say">
+    <h2 id="h-say">Pronunciation</h2>
+    <p class="hint">
+      Names and unusual words are where any reader gets caught out. Add a word
+      here with how it should sound, spelled the way you would say it, and it is
+      fixed everywhere from the next sentence on. Your entries override the
+      built-in ones.
+    </p>
+
+    <div class="row">
+      <div class="field">
+        <label for="say-word">Word</label>
+        <input id="say-word" type="text" placeholder="Xiaomi" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="say-as">Say it as</label>
+        <input id="say-as" type="text" placeholder="shao mee" autocomplete="off">
+      </div>
+      <div class="field self-end">
+        <button id="say-add" type="button" class="primary">Add</button>
+      </div>
+    </div>
+
+    <ul id="say-list" class="say-list" aria-label="Your pronunciations"></ul>
+
+    <details class="type">
+      <summary>Built-in pronunciations</summary>
+      <ul id="say-builtin" class="say-list muted" aria-label="Built-in pronunciations"></ul>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-history">
+    <h2 id="h-history">History</h2>
+
+    <div class="field">
+      <label for="retain-days">Keep entries for <output id="retain-out">90 days</output></label>
+      <input id="retain-days" type="range" min="1" max="365" step="1" value="90">
+    </div>
+
+    <div class="field">
+      <label for="retain-count">Keep at most <output id="count-out">500 pages</output></label>
+      <input id="retain-count" type="range" min="20" max="2000" step="20" value="500">
+    </div>
+
+    <div class="row">
+      <button id="prune" type="button">Remove old entries now</button>
+      <button id="clear-history" type="button" class="danger">Delete all history</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-about">
+    <h2 id="h-about">About</h2>
+    <p class="hint" id="version"></p>
+    <p class="hint">
+      Voices come from Kokoro-82M under Apache 2.0. Pronunciation uses CMUdict.
+      PDF text is read with PDF.js, and inference runs on ONNX Runtime. Nothing
+      bundled here is copyleft-licensed.
+    </p>
+  </section>
+</main>
+
+<script type="module" src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+{
+  "_comment": "Per-site extraction rules, for pages the generic scorer cannot read. Consumed by extension/src/content/extract.js.",
+  "_affects_stored_text": true,
+  "_why_fingerprinted": "Changing which elements are extracted changes the sentences, so a stored position captured under an older rule may no longer match. This downgrades confidence globally when a rule is added, which is the conservative direction: claiming a position is verified when the rules did change is the worse error.",
+
+  "_schema": {
+    "kind": "article | mail — mail joins several message bodies into one document",
+    "roots": "selectors for the readable content, tried in order, all matches used",
+    "skip": "selectors removed from within a root before extracting",
+    "label": "optional selector whose text introduces each root, e.g. a sender"
+  },
+
+  "_fragility": "These selectors belong to applications that change without warning, and a stale one degrades to the generic scorer rather than breaking. That fallback is the reason it is safe to guess here at all.",
+
+  "hosts": {
+    "mail.google.com": {
+      "kind": "mail",
+      "roots": ["h2.hP", "div.a3s"],
+      "skip": [
+        ".gmail_quote",
+        ".gmail_signature",
+        "blockquote",
+        ".adL",
+        ".gmail_extra",
+        "[data-smartmail=gmail_signature]"
+      ],
+      "_note": "div.a3s is the message body and has been stable for years. Quoted replies are skipped: reading an entire thread's quote chain repeats every message once per reply."
+    },
+
+    "outlook.live.com": {
+      "kind": "mail",
+      "roots": ["[role=\"heading\"][aria-level=\"2\"]", "div[role=\"document\"]"],
+      "skip": ["blockquote", "#Signature", "[id^=\"divRplyFwdMsg\"]"]
+    },
+    "outlook.office.com": {
+      "kind": "mail",
+      "roots": ["[role=\"heading\"][aria-level=\"2\"]", "div[role=\"document\"]"],
+      "skip": ["blockquote", "#Signature", "[id^=\"divRplyFwdMsg\"]"]
+    },
+    "outlook.office365.com": {
+      "kind": "mail",
+      "roots": ["[role=\"heading\"][aria-level=\"2\"]", "div[role=\"document\"]"],
+      "skip": ["blockquote", "#Signature", "[id^=\"divRplyFwdMsg\"]"]
+    },
+
+    "news.ycombinator.com": {
+      "kind": "article",
+      "roots": [".fatitem .titleline", ".fatitem .toptext", ".comment .commtext"],
+      "skip": [".reply", ".navs"],
+      "_note": "Comments are the content here; the generic scorer reads them as link-heavy furniture and rejects them."
+    }
+  }
+}

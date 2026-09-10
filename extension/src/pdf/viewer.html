@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Earmark PDF</title>
+  <link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+  <header>
+    <h1 id="title">Opening PDF…</h1>
+    <p id="meta" class="meta" role="status" aria-live="polite"></p>
+  </header>
+
+  <!-- The extracted text goes here as ordinary paragraphs, which is the whole
+       trick: downstream, a PDF is just a document. Segmentation, highlighting,
+       scroll-follow and history all work without knowing otherwise. -->
+  <main id="doc" aria-label="Document text"></main>
+
+  <p id="error" class="error" role="alert" hidden></p>
+
+  <script type="module" src="viewer.js"></script>
+</body>
+</html>

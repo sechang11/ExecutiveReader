@@ -1,0 +1,42 @@
+/*
+ * Highlight styling, injected into the page.
+ *
+ * Colours are set through custom properties on :root so the options page can
+ * override them without touching this file. Defaults meet WCAG AA contrast for
+ * black-on-wash and white-on-wash respectively, because we cannot know what the
+ * host page's text colour is and must stay legible either way. See spec
+ * section 14.
+ *
+ * ::highlight() supports only colour, background-color, text-decoration,
+ * text-shadow and -webkit-text-stroke. There is no padding or border here to
+ * forget about — the API genuinely does not accept them.
+ */
+
+:root {
+  --earmark-sentence-bg: rgba(255, 214, 102, 0.42);
+  --earmark-word-bg: rgba(255, 167, 38, 0.85);
+  --earmark-word-fg: #1a1a1a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --earmark-sentence-bg: rgba(96, 132, 255, 0.34);
+    --earmark-word-bg: rgba(122, 162, 255, 0.9);
+    --earmark-word-fg: #06101f;
+  }
+}
+
+::highlight(earmark-sentence) {
+  background-color: var(--earmark-sentence-bg);
+}
+
+/* The active word carries an underline as well as a wash, so the cue does not
+ * depend on colour alone. That is a hard requirement, not a nicety: it is what
+ * makes the reader usable for colour-blind users. */
+::highlight(earmark-word) {
+  background-color: var(--earmark-word-bg);
+  color: var(--earmark-word-fg);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}

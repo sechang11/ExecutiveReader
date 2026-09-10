@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Earmark audio</title>
+</head>
+<body>
+  <!--
+    Never visible. This document exists because a Manifest V3 service worker is
+    suspended after roughly thirty seconds idle and cannot hold a Web Audio
+    graph, while an offscreen document with the AUDIO_PLAYBACK reason stays
+    alive for as long as it is playing. See spec sections 2 and 3.2.
+  -->
+  <script type="module" src="offscreen.js"></script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+{
+  "_comment": "How a word SOUNDS. `builtin` ships with the app; `user` is written by the options page and the desktop settings dialog. Match is whole-word and case-insensitive unless `regex` is true.",
+  "_affects_stored_text": false,
+  "_scope": "This file owns pronunciation only. Say-as expansion — i.e., e.g., vs., etc. — moved to normalization.json under `expansions`, because those change what a token MEANS rather than how a word sounds, and the desktop normalizer already expanded them earlier in its pipeline, making the copies here dead entries. The division is now: normalization.json runs first and decides meaning, this file runs after and decides sound.",
+  "_regex_flag": "Kept for `user` entries, where a person may genuinely want a pattern. No builtin entry uses it: builtins must behave identically in Python's re and JavaScript's RegExp, and shared patterns are where those two quietly disagree.",
+  "builtin": [
+    {
+      "match": "GIF",
+      "say": "jiff"
+    },
+    {
+      "match": "SQL",
+      "say": "sequel"
+    },
+    {
+      "match": "psql",
+      "say": "postgres"
+    },
+    {
+      "match": "PostgreSQL",
+      "say": "postgres"
+    },
+    {
+      "match": "nginx",
+      "say": "engine ex"
+    },
+    {
+      "match": "kubectl",
+      "say": "cube control"
+    },
+    {
+      "match": "Kubernetes",
+      "say": "koober netties"
+    },
+    {
+      "match": "Xiaomi",
+      "say": "shao mee"
+    },
+    {
+      "match": "PyTorch",
+      "say": "pie torch"
+    },
+    {
+      "match": "numpy",
+      "say": "num pie"
+    },
+    {
+      "match": "scipy",
+      "say": "sigh pie"
+    },
+    {
+      "match": "matplotlib",
+      "say": "mat plot lib"
+    },
+    {
+      "match": "Jupyter",
+      "say": "jupiter"
+    },
+    {
+      "match": "PyPI",
+      "say": "pie pea eye"
+    },
+    {
+      "match": "regex",
+      "say": "redge ex"
+    },
+    {
+      "match": "regexp",
+      "say": "redge ex"
+    },
+    {
+      "match": "async",
+      "say": "ay sink"
+    },
+    {
+      "match": "char",
+      "say": "care"
+    },
+    {
+      "match": "enum",
+      "say": "ee num"
+    },
+    {
+      "match": "tuple",
+      "say": "tupple"
+    },
+    {
+      "match": "cache",
+      "say": "cash"
+    },
+    {
+      "match": "env",
+      "say": "environment"
+    },
+    {
+      "match": "nan",
+      "say": "N A N"
+    },
+    {
+      "match": "i18n",
+      "say": "internationalization"
+    },
+    {
+      "match": "Linux",
+      "say": "linnux"
+    },
+    {
+      "match": "sudo",
+      "say": "soo doo"
+    },
+    {
+      "match": "chmod",
+      "say": "ch mod"
+    },
+    {
+      "match": "ssh",
+      "say": "S S H"
+    },
+    {
+      "match": "GUI",
+      "say": "gooey"
+    },
+    {
+      "match": "JSON",
+      "say": "jay son"
+    },
+    {
+      "match": "YAML",
+      "say": "yammle"
+    },
+    {
+      "match": "JWT",
+      "say": "jot"
+    },
+    {
+      "match": "OAuth",
+      "say": "oh auth"
+    },
+    {
+      "match": "LLM",
+      "say": "L L M"
+    },
+    {
+      "match": "API",
+      "say": "A P I"
+    },
+    {
+      "match": "CLI",
+      "say": "C L I"
+    },
+    {
+      "match": "UI",
+      "say": "U I"
+    },
+    {
+      "match": "URL",
+      "say": "U R L"
+    },
+    {
+      "match": "HTTP",
+      "say": "H T T P"
+    },
+    {
+      "match": "CSS",
+      "say": "C S S"
+    },
+    {
+      "match": "SVG",
+      "say": "S V G"
+    }
+  ],
+  "user": []
+}

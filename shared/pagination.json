@@ -1,0 +1,44 @@
+{
+  "_comment": "Next-page discovery. The generic strategies run in order for every site; `sites` overrides them per host. See docs/extension-spec.md section 6.",
+  "_affects_stored_text": false,
+  "strategies": [
+    {
+      "id": "link-rel-next",
+      "selector": "link[rel=next], a[rel=next]",
+      "confidence": "high"
+    },
+    {
+      "id": "aria-next",
+      "selector": "[aria-label*='next' i]:not([aria-disabled=true])",
+      "confidence": "medium"
+    },
+    {
+      "id": "class-next",
+      "selector": ".next:not(.disabled), .pagination-next, .next-page, #next",
+      "confidence": "medium"
+    },
+    {
+      "id": "text-next",
+      "textMatch": [
+        "next",
+        "older",
+        "continue",
+        "›",
+        "»",
+        "→"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "url-increment",
+      "pattern": "(?<=[/?&](?:page|p|pg)=?)\\d+",
+      "confidence": "low"
+    }
+  ],
+  "confirm_below": "medium",
+  "sites": {},
+  "infinite_scroll": {
+    "_comment": "Hosts known to append content instead of navigating. A MutationObserver watches the article container and enqueues new blocks.",
+    "hosts": []
+  }
+}

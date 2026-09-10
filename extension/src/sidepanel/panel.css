@@ -1,0 +1,238 @@
+/*
+ * Side panel. Reading surface first, control surface second.
+ *
+ * The typography controls are not decoration. Adjustable size, line spacing,
+ * letter spacing and line width are what make long text readable for people
+ * with dyslexia or low vision, and they are the reason this panel earns its
+ * place alongside on-page highlighting. Spec section 15.
+ */
+
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #5a5f66;
+  --line: #d8dce2;
+  --accent: #2f5bd7;
+  --accent-fg: #ffffff;
+  --danger: #a3211b;
+  --read-bg: #ffe08a;
+  --read-fg: #1a1a1a;
+
+  /* Driven by the sliders. */
+  --text-size: 18px;
+  --text-height: 1.6;
+  --text-spacing: 0;
+  --text-width: 40em;
+  --text-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1d21;
+    --fg: #eef1f5;
+    --muted: #a6adb8;
+    --line: #363a41;
+    --accent: #7aa2ff;
+    --accent-fg: #0b1220;
+    --danger: #ff8a80;
+    --read-bg: #3d5bbf;
+    --read-fg: #ffffff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Never remove. Keyboard-only operation is a hard requirement, not a nicety. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+
+.tabs button {
+  flex: 1;
+  padding: 8px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Selection is bold as well as coloured, so the state does not depend on
+ * colour perception. */
+.tabs button[aria-selected="true"] {
+  color: var(--fg);
+  font-weight: 700;
+  border-bottom-color: var(--accent);
+}
+
+.status {
+  margin: 0 0 10px;
+  min-height: 1.45em;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.transport { display: flex; gap: 6px; margin-bottom: 12px; }
+
+button {
+  padding: 8px 10px;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+button:disabled { opacity: 0.45; cursor: default; }
+
+.transport button { flex: 1; }
+.transport .primary {
+  flex: 1.6;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+button.danger { color: var(--danger); border-color: var(--danger); }
+
+.field {
+  display: flex;
+  justify-content: space-between;
+  margin: 10px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+select, input[type="range"] { width: 100%; }
+
+select {
+  padding: 7px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+output { font-variant-numeric: tabular-nums; text-transform: none; }
+
+.type { margin: 12px 0; }
+.type summary { cursor: pointer; padding: 6px 0; color: var(--muted); font-size: 13px; }
+
+/* --- the mirrored text ------------------------------------------------- */
+
+.text {
+  max-width: var(--text-width);
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--text-family);
+  font-size: var(--text-size);
+  line-height: var(--text-height);
+  letter-spacing: var(--text-spacing);
+  overflow-wrap: break-word;
+}
+
+.text p { margin: 0 0 0.7em; }
+.text .empty { color: var(--muted); font-size: 14px; }
+
+.text .s { cursor: pointer; border-radius: 3px; }
+.text .s:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+
+/* The sentence being read. Bold as well as filled, so the cue survives
+ * greyscale and colour blindness. */
+.text .s.now {
+  background: var(--read-bg);
+  color: var(--read-fg);
+  font-weight: 600;
+}
+
+/* --- history ----------------------------------------------------------- */
+
+.history-head { display: flex; gap: 6px; margin-bottom: 10px; }
+.history-head button { flex: 1; font-size: 13px; }
+
+.history { list-style: none; margin: 0; padding: 0; }
+
+.history li { border-bottom: 1px solid var(--line); }
+
+.history button.entry {
+  display: block;
+  width: 100%;
+  padding: 9px 4px;
+  border: 0;
+  border-radius: 0;
+  text-align: left;
+}
+
+.history .t {
+  display: block;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history .m { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+
+.history .bar {
+  height: 3px;
+  margin-top: 6px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.history .bar i { display: block; height: 100%; background: var(--accent); }
+
+.empty-note { padding: 16px 4px; color: var(--muted); }
+
+/* --- auto-advance toggle and the next-page prompt ---------------------- */
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.toggle input { margin: 0; }
+
+/* An alert, so it must read as one rather than as decoration: a border on the
+ * accent colour plus a heavier weight, never colour alone. */
+.prompt {
+  margin: 12px 0;
+  padding: 10px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.prompt p { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.prompt-actions { display: flex; gap: 6px; }
+.prompt-actions button { flex: 1; font-size: 13px; }

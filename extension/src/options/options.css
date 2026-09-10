@@ -1,0 +1,176 @@
+/*
+ * Settings. A form, not a dashboard: one column, generous spacing, every
+ * control labelled and reachable by keyboard.
+ */
+
+:root {
+  color-scheme: light dark;
+  --bg: #fbfbfa;
+  --card: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #5a5f66;
+  --line: #dcdad6;
+  --accent: #2f5bd7;
+  --accent-fg: #ffffff;
+  --danger: #a3211b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181b;
+    --card: #1e2024;
+    --fg: #e8eaed;
+    --muted: #a6adb8;
+    --line: #33373d;
+    --accent: #7aa2ff;
+    --accent-fg: #0b1220;
+    --danger: #ff8a80;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 32px 20px 80px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+main { max-width: 44em; margin: 0 auto; }
+
+h1 { margin: 0 0 4px; font-size: 1.6em; }
+h2 { margin: 0 0 14px; font-size: 1.1em; }
+h3 { margin: 18px 0 6px; font-size: 1em; }
+
+.lede { margin: 0 0 20px; color: var(--muted); }
+
+.status {
+  min-height: 1.5em;
+  margin: 0 0 16px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+section {
+  margin-bottom: 20px;
+  padding: 20px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.field { margin-bottom: 18px; }
+.field:last-child { margin-bottom: 0; }
+
+label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+select, input[type="range"] { width: 100%; }
+
+select {
+  padding: 8px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: inherit;
+}
+
+input[type="color"] {
+  width: 100%;
+  height: 40px;
+  padding: 2px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+output { font-variant-numeric: tabular-nums; font-weight: 400; color: var(--muted); }
+
+.hint { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.row .field { flex: 1; min-width: 140px; margin-bottom: 0; }
+.self-end { display: flex; align-items: flex-end; }
+
+button {
+  padding: 9px 14px;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+button:disabled { opacity: 0.5; cursor: default; }
+
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+button.danger { color: var(--danger); border-color: var(--danger); }
+
+/* Never remove. Keyboard-only operation is a hard requirement. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 18px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.toggle input { margin: 4px 0 0; }
+.toggle em { display: block; color: var(--muted); font-size: 13px; font-style: normal; }
+.toggle span { font-weight: 600; }
+
+progress { width: 100%; height: 8px; }
+
+/* --- pronunciation editor --------------------------------------------- */
+
+.say-list { list-style: none; margin: 14px 0 0; padding: 0; }
+
+.say-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.say-list code {
+  font: 14px/1.4 ui-monospace, Consolas, monospace;
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.say-list .muted { color: var(--muted); font-size: 13px; }
+.say-list button.link {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 0;
+  color: var(--accent);
+  font-size: 13px;
+  background: transparent;
+}
+
+.say-list.muted li { border-bottom-color: transparent; padding: 4px 0; }
+
+input[type="text"] {
+  width: 100%;
+  padding: 8px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: inherit;
+}

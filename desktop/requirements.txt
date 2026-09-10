@@ -1,0 +1,36 @@
+# --- core (required) ---
+PySide6>=6.6            # tray icon, mini player, library window
+numpy>=1.24
+sounddevice>=0.4.6      # audio out; bundles PortAudio in the wheel
+pywin32>=306            # clipboard, SAPI voices, window handles
+
+# --- capture sources (recommended) ---
+uiautomation>=2.0.18    # Windows UI Automation: full page text, no scrolling
+pypdfium2>=4.25         # PDF text (same engine Chrome uses; BSD/Apache licensed)
+beautifulsoup4>=4.12    # EPUB/HTML text extraction
+lxml>=5.0               # the XML parser BeautifulSoup uses for EPUB manifests
+
+# Deliberately NOT listed: EbookLib. It is AGPL, which is stronger copyleft
+# than GPL, and an EPUB is a zip of XHTML with a manifest, so the dependency
+# bought convenience rather than capability. capture/files.py reads it with the
+# standard library instead. See CAVEATS.md.
+python-docx>=1.1        # .docx
+
+# --- OCR fallback (optional) ---
+mss>=9.0                # fast screen capture
+Pillow>=10.0
+winocr>=0.0.11          # wraps the free built-in Windows OCR engine
+
+# --- neural voices (optional but recommended) ---
+onnxruntime>=1.17       # swap for onnxruntime-gpu to use the 4070 Ti
+
+# Deliberately NOT listed: kokoro-onnx, phonemizer, espeakng-loader, piper-tts.
+# Kokoro needs phonemes rather than text, and every one of those packages
+# produces them with eSpeak NG, which is GPL-3.0. espeakng-loader ships the
+# library binary and 19 MB of data inside site-packages, so depending on any of
+# them would put copyleft code in anything we distribute. The model itself is
+# Apache 2.0, so this project phonemizes with its own permissive dictionary and
+# runs the model directly on onnxruntime. See CAVEATS.md.
+#
+# eSpeak stays supported as an add-on the USER installs, which unlocks the
+# non-English voices. We detect it; we never ship it.

@@ -1,0 +1,9 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+extension/assets/models/
+*.onnx
+.DS_Store

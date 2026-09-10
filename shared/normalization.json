@@ -1,0 +1,221 @@
+{
+  "_comment": "How raw text becomes speakable text. Consumed by both halves. Everything here is DATA, not prose: if a field cannot be acted on by a program, it belongs in a key prefixed with an underscore, which consumers must ignore.",
+  "_affects_stored_text": true,
+  "_schema": "No regular expressions live in this file, deliberately. Python's re and JavaScript's RegExp differ on lookbehind width, named-group syntax, and backreference syntax, so a shared pattern is a shared bug waiting to happen. Instead each rule states a condition from a small fixed vocabulary that both sides implement identically. Adding a condition means changing both engines on purpose, which is the point.",
+  "urls": {
+    "mode": "domain",
+    "_modes": {
+      "full": "read the entire URL character by character",
+      "domain": "read only the domain, e.g. 'link to example.com'",
+      "skip": "say 'link' and move on"
+    }
+  },
+  "_symbol_conditions": {
+    "always": "replace every occurrence",
+    "isolated": "only when whitespace or a string boundary sits on BOTH sides",
+    "digit-before": "only when the nearest preceding non-space character is a digit",
+    "digit-after": "only when the nearest following non-space character is a digit"
+  },
+  "_symbol_rationale": "The conditions are what keep expansion from wrecking real text. Bare substitution turns C++ into 'C plus plus', addresses into 'user at example dot com', and '## Heading' into 'number number Heading'. Each condition below was chosen against a specific way the naive version fails.",
+  "symbols": [
+    {
+      "symbol": "&",
+      "say": "and",
+      "when": "isolated",
+      "_why": "R&D and && must survive"
+    },
+    {
+      "symbol": "@",
+      "say": "at",
+      "when": "isolated",
+      "_why": "protects addresses and @handles"
+    },
+    {
+      "symbol": "+",
+      "say": "plus",
+      "when": "isolated",
+      "_why": "protects C++ and ++i"
+    },
+    {
+      "symbol": "=",
+      "say": "equals",
+      "when": "isolated",
+      "_why": "protects == and key=value"
+    },
+    {
+      "symbol": "%",
+      "say": "percent",
+      "when": "digit-before",
+      "_why": "protects %s format strings"
+    },
+    {
+      "symbol": "#",
+      "say": "number",
+      "when": "digit-after",
+      "_why": "protects C#, #hashtag, and markdown headings"
+    },
+    {
+      "symbol": "~",
+      "say": "about",
+      "when": "digit-after",
+      "_why": "protects ~/home paths"
+    },
+    {
+      "symbol": "§",
+      "say": "section",
+      "when": "digit-after"
+    },
+    {
+      "symbol": "°",
+      "say": "degrees",
+      "when": "digit-before"
+    },
+    {
+      "symbol": "©",
+      "say": "copyright",
+      "when": "always"
+    },
+    {
+      "symbol": "™",
+      "say": "trademark",
+      "when": "always"
+    },
+    {
+      "symbol": "®",
+      "say": "registered",
+      "when": "always"
+    }
+  ],
+  "_output_contract": "After the symbol stage, collapse runs of spaces and tabs to a single space and trim the ends. Newlines are left alone. Without this the two implementations produce the same speech from different strings — one pads every replacement, the other pads only where needed — and a cross-language check can then only ever assert equivalence, never equality. It also matters for anything mapping offsets through normalization, where a stray double space shifts every position after it.",
+  "_currency_note": "Currency symbols are prefixes in text but suffixes in speech: $50 is spoken 'fifty dollars', not 'dollars fifty'. That reordering is why they cannot live in the symbols list above. Applies only when a number follows.",
+  "currency": [
+    {
+      "symbol": "$",
+      "singular": "dollar",
+      "plural": "dollars"
+    },
+    {
+      "symbol": "£",
+      "singular": "pound",
+      "plural": "pounds"
+    },
+    {
+      "symbol": "€",
+      "singular": "euro",
+      "plural": "euros"
+    },
+    {
+      "symbol": "¥",
+      "singular": "yen",
+      "plural": "yen"
+    }
+  ],
+  "_expansions_note": "Say-as expansion lives here, NOT in pronunciation.json. The division: this file decides what a token MEANS when spoken, pronunciation.json decides how a word SOUNDS. Both sides must apply these before the pronunciation dictionary runs.",
+  "_expansion_matching": {
+    "literal": "Matches are literal substrings, never patterns. Same reason as the symbols above: shared regexes drift between Python and JavaScript.",
+    "boundaries": "A match is rejected when the character immediately before OR immediately after it is a letter or a digit. This replaces the word-boundary anchors the old regex entries carried. It is what stops 'w/' firing inside 'w/o', and what stops '->' firing inside the C pointer syntax 'node->next' while still catching 'A -> B'.",
+    "longest_first": "Candidates must be tried longest first, so 'w/o' wins over 'w/' and 'et al.' wins over any shorter prefix. Sorting by match length descending at load time satisfies this.",
+    "case": "Matching is case-insensitive by default, which is correct for every entry currently in the list: 'n.b.' and 'N.B.' mean the same thing. Set matchCase true on an entry that would otherwise eat an ordinary word. Nothing here needs it yet, but the first person to add 'US' for United States would silently rewrite every 'us' without it."
+  },
+  "expansions": [
+    {
+      "match": "i.e.",
+      "say": "that is"
+    },
+    {
+      "match": "e.g.",
+      "say": "for example"
+    },
+    {
+      "match": "vs.",
+      "say": "versus"
+    },
+    {
+      "match": "etc.",
+      "say": "et cetera"
+    },
+    {
+      "match": "et al.",
+      "say": "and others"
+    },
+    {
+      "match": "cf.",
+      "say": "compare"
+    },
+    {
+      "match": "approx.",
+      "say": "approximately"
+    },
+    {
+      "match": "N.B.",
+      "say": "note well"
+    },
+    {
+      "match": "w/o",
+      "say": "without"
+    },
+    {
+      "match": "w/",
+      "say": "with"
+    },
+    {
+      "match": "b/c",
+      "say": "because"
+    },
+    {
+      "match": "n/a",
+      "say": "not applicable"
+    },
+    {
+      "match": ">=",
+      "say": "greater than or equal to"
+    },
+    {
+      "match": "<=",
+      "say": "less than or equal to"
+    },
+    {
+      "match": "->",
+      "say": "to",
+      "_why": "prose arrows only; the boundary rule leaves node->next alone"
+    },
+    {
+      "match": "=>",
+      "say": "to"
+    }
+  ],
+  "collapse": {
+    "repeated_punctuation": true,
+    "emoji": "skip",
+    "zero_width": true,
+    "smart_quotes_to_plain": true,
+    "soft_hyphens": true,
+    "dot_leaders": true,
+    "footnote_markers": true
+  },
+  "_numbers_note": "Flags only. Each side owns the algorithm; this file owns whether it runs. Prose descriptions are here as _examples so neither side has to guess what the flag means.",
+  "numbers": {
+    "years": true,
+    "ordinals": true,
+    "ranges": true,
+    "phone_grouping": true,
+    "versions": true,
+    "large_threshold": 1000000,
+    "_examples": {
+      "years": "1984 reads as nineteen eighty-four, not one thousand nine hundred eighty-four",
+      "ordinals": "1st, 2nd, 3rd expand to first, second, third",
+      "ranges": "10-20 reads as ten to twenty",
+      "phone_grouping": "digits grouped in threes with pauses",
+      "versions": "v2.1.3 reads as version two point one point three",
+      "large_threshold": "at or above this value, 1,200,000 reads as one point two million"
+    }
+  },
+  "code_blocks": {
+    "mode": "announce",
+    "_modes": {
+      "read": "read the code verbatim",
+      "announce": "say 'code block, twelve lines' and skip",
+      "skip": "say nothing"
+    }
+  }
+}

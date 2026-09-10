@@ -1,0 +1,12 @@
+{
+  "name": "earmark-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Tells Node to treat the .js files here as ES modules, which is how Chrome already loads them. There is no build step and no dependencies; this file exists for the test runner.",
+  "scripts": {
+    "test": "node --test test/",
+    "sync": "node ../tools/sync-shared.mjs",
+    "icons": "node ../tools/make-icons.mjs"
+  }
+}

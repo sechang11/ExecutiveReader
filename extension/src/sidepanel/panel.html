@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Earmark</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <!-- Tabs are real buttons with ARIA state rather than styled divs, because
+       this panel is the reading surface for people using a screen reader and
+       the accessible name has to carry the state. Spec section 15. -->
+  <nav class="tabs" role="tablist" aria-label="Panel sections">
+    <button id="tab-reading" role="tab" aria-selected="true" aria-controls="view-reading">Reading</button>
+    <button id="tab-history" role="tab" aria-selected="false" aria-controls="view-history">History</button>
+  </nav>
+
+  <p id="status" class="status" role="status" aria-live="polite">Nothing playing</p>
+
+  <section id="view-reading" role="tabpanel" aria-labelledby="tab-reading">
+    <div class="transport">
+      <button id="prev" type="button" aria-label="Previous sentence">&#9664;&#9664;</button>
+      <button id="play" type="button" class="primary" aria-label="Play">&#9654;</button>
+      <button id="next" type="button" aria-label="Next sentence">&#9654;&#9654;</button>
+    </div>
+
+    <label class="field" for="speed">
+      Speed <output id="speed-out" for="speed">1.00&times;</output>
+    </label>
+    <input id="speed" type="range" min="0.5" max="4" step="0.05" value="1">
+
+    <label class="toggle">
+      <input id="auto-advance" type="checkbox">
+      <span>Keep reading onto the next page</span>
+    </label>
+
+    <!-- Shown only when a next-page link was found but not trusted enough to
+         follow unasked. Following a bad guess navigates away from what someone
+         was reading, so the low-confidence case becomes a question. -->
+    <div id="next-prompt" class="prompt" role="alert" hidden>
+      <p id="next-label"></p>
+      <div class="prompt-actions">
+        <button id="next-go" type="button" class="primary">Continue</button>
+        <button id="next-no" type="button">Stay here</button>
+      </div>
+    </div>
+
+    <details class="type">
+      <summary>Text appearance</summary>
+
+      <label class="field" for="font">Typeface</label>
+      <select id="font">
+        <option value="system">System</option>
+        <option value="serif">Serif</option>
+        <option value="mono">Monospace</option>
+        <!-- Named rather than assumed: the font only applies if the reader has
+             installed it, and the label says so instead of silently doing
+             nothing. -->
+        <option value="dyslexic">OpenDyslexic, if installed</option>
+      </select>
+
+      <label class="field" for="size">Size <output id="size-out">18px</output></label>
+      <input id="size" type="range" min="12" max="40" step="1" value="18">
+
+      <label class="field" for="height">Line spacing <output id="height-out">1.6</output></label>
+      <input id="height" type="range" min="1.2" max="2.4" step="0.1" value="1.6">
+
+      <label class="field" for="spacing">Letter spacing <output id="spacing-out">0.00em</output></label>
+      <input id="spacing" type="range" min="0" max="0.2" step="0.01" value="0">
+
+      <label class="field" for="width">Line width <output id="width-out">40em</output></label>
+      <input id="width" type="range" min="20" max="70" step="1" value="40">
+    </details>
+
+    <!-- The mirrored text. Primary highlighting happens on the page itself;
+         this is the fallback for pages that extract badly, and a reading mode
+         for pages that are simply unpleasant to look at. Spec section 5. -->
+    <article id="text" class="text" tabindex="0" aria-label="Article text">
+      <p class="empty">Press play, or open a page and use Alt+P.</p>
+    </article>
+  </section>
+
+  <section id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden>
+    <div class="history-head">
+      <button id="prune" type="button">Clean up old entries</button>
+      <button id="clear" type="button" class="danger">Clear all</button>
+    </div>
+    <ul id="history" class="history" aria-label="Reading history"></ul>
+  </section>
+
+  <script type="module" src="panel.js"></script>
+</body>
+</html>

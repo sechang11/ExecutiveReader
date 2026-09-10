@@ -1,0 +1,318 @@
+# Extension caveats
+
+Constraints, limits and traps that are expensive to rediscover. The desktop half
+keeps its own list at the repo root; this one is browser-specific.
+
+Ordered by how much time each would cost someone who did not know it.
+
+---
+
+## 1. The service worker dies, and everything follows from that
+
+Chrome suspends it after roughly thirty seconds idle. It cannot hold playback
+state, an audio graph, or a loaded model. Every state transition is mirrored to
+session storage and rehydrated on wake, and an open port from the content script
+keeps it alive during a read.
+
+The consequence people miss: **an 88 MB inference session cannot live here.**
+Neural voices run in the offscreen document, which survives, so the model loads
+once per listening session rather than once per pause.
+
+## 2. Audio and inference must share the offscreen document
+
+`chrome.offscreen` with reason `AUDIO_PLAYBACK` is the only Manifest V3 way to
+keep a Web Audio graph alive across navigation. Creating one is **not
+idempotent** — a second create throws — and the worker that created it may have
+been killed since, so "did I create one?" cannot be answered from memory. Every
+path re-derives it from `chrome.runtime.getContexts`.
+
+Audio never crosses back to the worker. Moving a megabyte of samples per
+sentence would be pointless when the worker cannot hold the graph anyway.
+
+## 3. Teardown order is a real hazard, and nothing tests it
+
+Stop the producer, await it, *then* release the sink. Reversed, you get
+detached-node errors and audio that plays past stop. The desktop half hit the
+same bug in C and segfaulted at exit **after logging a clean shutdown**.
+
+Tests use a stub sink, so the code that tears down a real device has zero
+coverage by construction. Run the extension to completion; do not trust green.
+
+## 4. No remote code, and the failure is silence
+
+Extension pages may not load scripts from the network. The ONNX runtime and
+PDF.js are vendored for this reason. Both have a default that fetches their
+worker or WebAssembly from a CDN, and when the policy blocks it **there is no
+error, only a hang**. Both are explicitly pointed at local paths:
+
+- `ort.env.wasm.wasmPaths`
+- `pdfjs.GlobalWorkerOptions.workerSrc`
+
+Model weights are data, not code, so fetching those at runtime is fine.
+
+## 5. Content-script dependencies must be web-accessible
+
+A module the content script imports, or a file it fetches, must appear in
+`web_accessible_resources`. A missing one does not fail the build. The reader
+simply never starts, with an error only in the page's own console.
+
+This has broken twice. `test/manifest.test.mjs` now walks every import and fetch
+from the content entry points and checks each against the resource list.
+
+## 6. Paired identifiers across files have no compiler
+
+A highlight name in CSS and the same string in JavaScript; a port name in two
+scripts; an element id in HTML and a lookup in JavaScript; a message type sent
+in one file and switched on in another. Nothing type-checks any of these, and a
+mismatch produces **silence, not an error**: highlighting stops painting, or the
+keep-alive dies with an empty console.
+
+Renaming anything means grepping both sides. The rename to Earmark had nine
+embedded occurrences, three of which would have failed silently.
+
+## 7. Chrome's PDF viewer is closed to us
+
+It is a separate extension; we cannot inject into it. Reading a PDF means
+opening our own viewer, which extracts the text and renders it as ordinary
+paragraphs, after which everything downstream treats it as a normal document.
+
+Text-layer PDFs only. A scan is an image and needs OCR, which the desktop half
+has and the browser does not.
+
+## 8. PDF reading order is reconstruction, and columns come before lines
+
+A PDF is glyphs at coordinates. There are no paragraphs, no columns, no order.
+
+The ordering trap: in a two-column layout **the columns share baselines**, so
+grouping items into lines before splitting columns merges each left line with
+the right line beside it, and nothing downstream can undo it. Columns are a
+property of x, lines of y, and x must be resolved first.
+
+## 9. Speed belongs in synthesis, not playback
+
+Kokoro takes speed as an input and stretches duration at generation time, so
+2.5x keeps its pitch. Applying `playbackRate` to finished audio pitch-shifts it,
+which is why fast reading sounds like a chipmunk in most readers. The engine
+interface carries `appliesSpeedInternally` so the player only resamples for
+engines that cannot do it themselves.
+
+## 10. The phoneme alphabet drops what it does not know
+
+Kokoro's alphabet is 115 symbols and tokenization is character-level. A symbol
+outside it is **dropped, not rejected** — the word loses a sound and nothing
+reports it.
+
+Affricates are the specific trap: the alphabet has `ʧ` and `ʤ` as single symbols
+and no two-character `tʃ`, but `tʃ` tokenizes perfectly happily as `t` then `ʃ`,
+which is a different sound. Diphthongs genuinely are two symbols and must be
+left alone.
+
+## 11. Match the training data, not the textbook
+
+The first grapheme-to-phoneme implementation marked stress at the syllable
+onset, which is correct notation. Output got worse. Kokoro was trained on
+eSpeak-shaped input, which marks the vowel: `kwˈɪk`, not `ˈkwɪk`. A model
+rewards familiarity, not correctness.
+
+## 12. Nothing copyleft ships, and that is enforced
+
+eSpeak gives better pronunciation and seven more languages, and is GPL-3.0.
+Shipping it would make the extension GPL: source on request, and no proprietary
+tier later.
+
+Both packages named `phonemizer` carry it — the npm one **declares Apache-2.0
+while embedding eSpeak as WebAssembly** — and `piper-phonemize` embeds the same
+engine. `test/licence.test.mjs` fails if any of it appears in `vendor/`.
+
+The cost: pronunciation is CMUdict, which misses about 2% of words on real
+article text, and the catalogue is 29 English voices rather than 55 across eight
+languages.
+
+The mitigation is the pronunciation editor, and it is worth stating that this
+file claimed that mitigation existed for some time while nothing in the
+extension read the rules file at all. The desktop half used it; the browser half
+shipped it and ignored it. A stated mitigation is a claim like any other.
+
+## 13. Store review
+
+Broad host access is requested **on demand**, not at install: asking for every
+site up front lengthens review and costs installs. Also required at submission:
+a single-purpose statement, a justification per permission, and a privacy
+policy. Local-only processing makes that policy short, which is itself worth
+something.
+
+## 14. Rules changes invalidate saved positions
+
+Reading positions store the *normalized* sentence text, and normalization is
+driven by files we edit. Editing them rewrites the strings positions were
+captured from. Adding `w/` to the expansion list did exactly that.
+
+Every position carries the fingerprint from `shared/fingerprint.json`. Use it
+for **confidence, never control flow** — always try an exact match first,
+whatever the stamp says. See `docs/anchor-vocabulary.md`.
+
+The fingerprint covers only files that change the *text of a sentence*, and each
+shared file must declare `_affects_stored_text` or the sync tool refuses to run.
+Getting that wrong is quiet in both directions:
+
+| File | Fingerprinted | Why |
+|---|---|---|
+| `abbreviations.json` | yes | sentence boundaries change the stored text |
+| `normalization.json` | yes | rewrites the stored text directly |
+| `sites.json` | yes | changes which elements are extracted |
+| `pronunciation.json` | no | applied per word at synthesis, never stored |
+| `pagination.json` | no | navigation only |
+
+This started as a bug. Everything in `shared/` was hashed, so adding one
+per-site pagination selector — which cannot change a single spoken word —
+marked every saved position as "rules changed" and downgraded confidence
+everywhere for nothing.
+
+When in doubt, declare `true`. A false positive costs a little confidence; a
+false negative claims a position is verified when the rules that produced it
+have changed.
+
+## 15. Site rules will break, and must break softly
+
+`shared/sites.json` holds selectors for webmail and forums, where the generic
+scorer finds only application furniture. Those selectors belong to applications
+that change without warning, and no test here can notice.
+
+So a rule that matches nothing **falls back to the generic scorer** rather than
+returning an empty document. That fallback is the only reason it is safe to
+guess at these selectors at all.
+
+Mail rules must skip quoted replies. Without that, a ten-message thread reads
+every message once per reply below it, which is roughly fifty readings of the
+same text.
+
+## 16. Named constants disappear from a threshold audit
+
+Extracting a magic number into a named constant is the recommended fix, and it
+removes the number from any audit that greps comparisons. The tidier the code
+gets, the less such a tool sees. Auditing `length < 200` style expressions found
+12 thresholds here; auditing named constants as well found 18 more, including
+both of the ones that audit had just prompted me to extract.
+
+Mutating each in turn — change the value, run the suite, restore — sorts them
+into pinned and not. As of writing, five remain unpinned **on purpose**:
+
+| Constant | Why it is not pinned |
+|---|---|
+| `SAVE_EVERY` | needs `chrome.storage`; it trades write quota against staleness |
+| `RESUME_AFTER_MS` | needs scroll and wheel events |
+| `DB_VERSION` | a schema version, not a judgment. Pinning it would only assert it equals itself |
+| `MAX_ENTRIES` | pinning the default honestly needs 501 entries written, which buys little for the time |
+| `SAMPLE_RATE` | a fact about the model, and module-private. Wrong, every voice is pitch-shifted and nothing errors |
+
+The list is the point. A constant that survives mutation is a question, not a
+verdict: some encode a judgment and should be pinned, some encode a fact and
+should not, and the two are indistinguishable until someone looks.
+
+## 17. Shipped is not read, and bytes matching is not behaviour matching
+
+The pronunciation rules sat in the package for weeks, byte-identical to the
+canonical copy, passing every sync and drift check, while nothing in the
+extension read them. The desktop half used the file, so the shared-data pattern
+held everywhere anyone looked and stopped being looked at.
+
+The sync tests compared bytes. Bytes matching is not behaviour matching, which
+is the stale-duplicate lesson pointed the other way: there, identical bytes hid
+a stale source; here, identical bytes hid an unused one.
+
+Two guards, one weak and one strong.
+
+`test/manifest.test.mjs` asserts every shared file is referenced somewhere in
+the source. That is a filename appearing in a string, and it would pass for code
+that fetches a file and drops it on the floor.
+
+`test/shared-data.test.mjs` blanks each file in turn and requires the behaviour
+it drives to change. If emptying a rule set changes nothing, it is not being
+consulted. Adapted from the desktop half, which uses the same shape for the
+quieter version of this failure: there a missing file falls through to a
+built-in fallback and everything keeps working slightly worse.
+
+Its limit is stated in the test: it proves the data is consulted, not that it is
+consulted correctly.
+
+## 18. Shared data is copied, not owned — and a stale copy answers
+
+`shared/cmudict/` and `shared/kokoro/` are canonical. The matching directories
+under `extension/vendor/` are copies made by `tools/sync-shared.mjs` and
+**committed**, because a Chrome extension can only load files inside its own
+folder and Load Unpacked must work from a checkout without running any tool.
+
+They moved out of the extension because the desktop half reads the same data,
+and a deliverable that cannot be packaged without reaching into another
+deliverable's directory is the wrong shape.
+
+**A copy fails in two ways, and both are silent.**
+
+It stops being made, or is made somewhere else. That happened immediately: the
+sync loop logged success while writing one directory too high, because its
+destination was computed relative to the JSON output path rather than to the
+extension root.
+
+Worse, it goes stale. **A stale duplicate does not break — it answers.** Both
+halves would agree with each other, both conformance harnesses would pass, and
+words would be pronounced by an older rule with nothing anywhere reporting it.
+The desktop half hit precisely this: its loader searched two paths, neither was
+the new canonical location, and it silently fell through to the extension's copy
+and kept working.
+
+So `test/standalone.test.mjs` checks presence, byte-equality against the
+canonical version, and usability rather than existence — the dictionary must
+decompress to more than 120,000 entries, and the phoneme alphabet must hold
+exactly 115 symbols. An empty dictionary is silent too: every word falls through
+to letter-to-sound and it still speaks.
+
+The directories are discovered rather than listed, so a third one is covered the
+day it appears rather than the day someone remembers to add it.
+
+## 19. A true premise is not a checked conclusion
+
+"A Chrome extension can only package files inside its own folder" is true. "So
+the canonical copy cannot live elsewhere" does not follow, and I asserted it
+anyway. The constraint governs *loading*; it says nothing about ownership, and
+the copy is what bridges them.
+
+That error survived review precisely because the true half made the whole
+statement feel verified. It is harder to catch than a plainly wrong fact,
+because nothing in it looks doubtful.
+
+**It happened three times in one day, in three different disguises.** All three
+were claims about *behaviour* derived from something true about *structure*, and
+structure is exactly what feels like it does not need checking:
+
+| The claim | The true part | What did not follow |
+|---|---|---|
+| The canonical dictionary cannot move | an extension only loads files inside its own folder | that governs loading, not ownership |
+| Pronunciation overrides mitigate the dictionary's misses | true of the desktop half, which reads that file | the extension shipped it and read nothing |
+| The idempotence test subsumes the pairwise one | both check for rule chaining | measured, the pairwise one strictly dominates |
+
+None of the three felt like a guess while being written. Each read as a
+structural property, which is the costume the problem wears.
+
+**The true half is the active ingredient.** A wholly wrong claim invites
+checking; a claim with a correct premise attached actively suppresses it. That
+is why this is worse than being plainly mistaken rather than better.
+
+There is no procedure here, unlike every other item in this file, which all
+reduce to measuring what a check covers. Noticing a conclusion is present at all
+is the hard step, and a sound premise is what stops it looking like one.
+
+The only thing that caught all three was the same accident: someone implemented
+against the claim and measured, rather than reading it and agreeing. That is not
+a procedure, but it is an argument for writing conclusions down where somebody
+will act on them.
+
+## 20. Name the specific absence, not the category
+
+Neural voices can be unavailable because the pronunciation dictionary did not
+load, or because the model has not been downloaded. Those have opposite fixes,
+and one shared message sends people the wrong way: someone who has just waited
+for an 88 MB download and reads "unavailable" will download it again.
+
+`kokoroEngine.blockedBy()` returns a reason code and a sentence naming the
+actual absence. Any new failure mode here gets its own reason rather than
+joining an existing one.

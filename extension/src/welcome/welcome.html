@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Earmark is installed</title>
+  <link rel="stylesheet" href="../options/options.css">
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+<main>
+  <h1>Earmark is ready</h1>
+  <p class="lede">One thing to try, and one decision to make. Both take a minute.</p>
+
+  <section aria-labelledby="h-try">
+    <h2 id="h-try">Try it now</h2>
+    <ol class="steps">
+      <li>Open any article in another tab.</li>
+      <li>Press <kbd>Alt</kbd> + <kbd>P</kbd>.</li>
+    </ol>
+    <p class="hint">
+      That is the whole thing. The sentence being read is highlighted on the page
+      itself, and it follows along as it scrolls.
+    </p>
+
+    <h3>The rest of the keys</h3>
+    <table class="keys">
+      <tbody>
+        <tr><th scope="row"><kbd>Alt</kbd>+<kbd>P</kbd></th><td>Play or pause</td></tr>
+        <tr><th scope="row"><kbd>Alt</kbd>+<kbd>S</kbd></th><td>Read just the selected text</td></tr>
+        <tr><th scope="row"><kbd>Alt</kbd>+<kbd>←</kbd> <kbd>→</kbd></th><td>Back or forward a sentence</td></tr>
+        <tr><th scope="row"><kbd>Alt</kbd>+click</th><td>Start reading from that paragraph</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section aria-labelledby="h-voice">
+    <h2 id="h-voice">Choose how it sounds</h2>
+    <p>
+      Right now Earmark uses the voices your computer already has. They work
+      instantly and need no download, and most of them are fairly robotic.
+    </p>
+    <p>
+      The natural voices are the reason this extension exists. They run on your
+      own machine, so they are free and work offline, and nothing you read is
+      sent anywhere. They need a one-time download of about 88&nbsp;MB.
+    </p>
+    <div class="row">
+      <button id="get-voices" type="button" class="primary">Download natural voices</button>
+      <button id="later" type="button">Stay on system voices</button>
+    </div>
+    <div id="progress-wrap" hidden>
+      <progress id="progress" max="100" value="0" aria-describedby="progress-text"></progress>
+      <p class="hint" id="progress-text" role="status" aria-live="polite"></p>
+    </div>
+    <p class="hint">
+      You can change this at any time in settings, and remove the download again
+      from the same place.
+    </p>
+  </section>
+
+  <section aria-labelledby="h-know">
+    <h2 id="h-know">Worth knowing</h2>
+    <ul class="plain">
+      <li>
+        <strong>Nothing leaves your device</strong> unless you pick a voice
+        labelled &ldquo;needs a connection&rdquo;, which are provided by your
+        browser rather than by us.
+      </li>
+      <li>
+        <strong>It remembers where you stopped.</strong> Come back later and it
+        resumes at the right sentence, even if the page has been edited.
+      </li>
+      <li>
+        <strong>PDFs work too.</strong> Open one and press the same key.
+      </li>
+      <li>
+        <strong>Continuing to the next page is off by default.</strong> Turn it on
+        in settings if you want long articles read end to end.
+      </li>
+    </ul>
+  </section>
+
+  <p class="footer">
+    <a href="../options/options.html">Open settings</a>
+    &middot;
+    <a href="../../PRIVACY.md">Privacy policy</a>
+  </p>
+</main>
+
+<script type="module" src="welcome.js"></script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+/*
+ * PDF reading surface. A document, not an application: generous measure,
+ * comfortable spacing, and nothing competing with the text.
+ */
+
+:root {
+  color-scheme: light dark;
+  --bg: #fbfbfa;
+  --fg: #1a1a1a;
+  --muted: #5a5f66;
+  --line: #e2e0dc;
+  --danger: #a3211b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181b;
+    --fg: #e8eaed;
+    --muted: #a6adb8;
+    --line: #2e3238;
+    --danger: #ff8a80;
+  }
+}
+
+body {
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+  max-width: 42em;
+  background: var(--bg);
+  color: var(--fg);
+  font: 18px/1.65 Georgia, "Iowan Old Style", "Times New Roman", serif;
+}
+
+header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 16px; }
+
+h1 {
+  margin: 0 0 6px;
+  font-size: 1.5em;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+
+.meta, .error {
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--muted);
+  margin: 0;
+}
+
+.error {
+  margin-top: 24px;
+  padding: 14px 16px;
+  border: 2px solid var(--danger);
+  border-radius: 8px;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+section { margin-bottom: 8px; }
+
+p { margin: 0 0 1.1em; overflow-wrap: break-word; }
+
+/* Orientation only. Small, quiet, and aria-hidden so it is never spoken. */
+.page-mark {
+  margin: 32px 0 12px;
+  font: 11px/1 system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+section:first-child .page-mark { margin-top: 0; border-top: 0; padding-top: 0; }

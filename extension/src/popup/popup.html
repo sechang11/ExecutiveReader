@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Earmark</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Announced to screen readers when playback state changes; the visual
+       controls alone are not enough for the audience this is built for. -->
+  <p id="status" class="status" role="status" aria-live="polite">Ready</p>
+
+  <div class="transport">
+    <button id="prev" type="button" aria-label="Previous sentence">&#9664;&#9664;</button>
+    <button id="play" type="button" class="primary" aria-label="Play">&#9654;</button>
+    <button id="next" type="button" aria-label="Next sentence">&#9654;&#9654;</button>
+    <button id="stop" type="button" aria-label="Stop">&#9632;</button>
+  </div>
+
+  <label class="field" for="voice">Voice</label>
+  <select id="voice"></select>
+
+  <label class="field" for="speed">
+    Speed <output id="speed-out" for="speed">1.0&times;</output>
+  </label>
+  <input id="speed" type="range" min="0.5" max="4" step="0.05" value="1"
+         aria-describedby="speed-out">
+
+  <button id="open-panel" type="button" class="wide">
+    Open reading panel &amp; history
+  </button>
+
+  <p class="hint">
+    Alt+P plays or pauses. Alt+S reads the selection.
+    Alt+click a paragraph to start from there.
+  </p>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

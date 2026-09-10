@@ -1,0 +1,24 @@
+/* First run. Shares the settings stylesheet; only the extras live here. */
+
+.steps { margin: 0 0 14px; padding-left: 1.3em; }
+.steps li { margin-bottom: 6px; }
+
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--bg);
+  font: 13px/1.4 ui-monospace, Consolas, monospace;
+}
+
+.keys { border-collapse: collapse; width: 100%; }
+.keys th { text-align: left; padding: 6px 12px 6px 0; font-weight: 400; white-space: nowrap; }
+.keys td { padding: 6px 0; color: var(--muted); }
+
+.plain { margin: 0; padding-left: 1.2em; }
+.plain li { margin-bottom: 10px; }
+
+.footer { margin-top: 24px; text-align: center; color: var(--muted); font-size: 14px; }
+.footer a { color: var(--accent); }

@@ -1,0 +1,110 @@
+{
+  "manifest_version": 3,
+  "name": "Earmark — Natural Text to Speech Reader",
+  "version": "0.1.0",
+  "description": "Reads web pages aloud in natural voices that run on your own machine. Free, offline, and private.",
+  "minimum_chrome_version": "116",
+  "background": {
+    "service_worker": "src/background/index.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Earmark — read this page",
+    "default_popup": "src/popup/popup.html"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/panel.html"
+  },
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "scripting",
+    "tts",
+    "offscreen",
+    "sidePanel",
+    "contextMenus"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "commands": {
+    "toggle-play": {
+      "suggested_key": {
+        "default": "Alt+P"
+      },
+      "description": "Play or pause reading"
+    },
+    "read-selection": {
+      "suggested_key": {
+        "default": "Alt+S"
+      },
+      "description": "Read the selected text"
+    },
+    "next-sentence": {
+      "suggested_key": {
+        "default": "Alt+Right"
+      },
+      "description": "Skip to the next sentence"
+    },
+    "prev-sentence": {
+      "suggested_key": {
+        "default": "Alt+Left"
+      },
+      "description": "Go back one sentence"
+    },
+    "speed-up": {
+      "description": "Read faster"
+    },
+    "speed-down": {
+      "description": "Read slower"
+    },
+    "stop": {
+      "description": "Stop reading"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/content/index.js",
+        "src/content/extract.js",
+        "src/content/highlight.js",
+        "src/content/scroll.js",
+        "src/content/pagination.js",
+        "src/content/highlight.css",
+        "src/core/segment.js",
+        "src/core/normalize.js",
+        "src/shared/abbreviations.json",
+        "src/shared/normalization.json",
+        "src/shared/pronunciation.json",
+        "src/shared/pagination.json",
+        "src/shared/sites.json",
+        "src/engines/kokoro/*.js",
+        "vendor/onnxruntime/*",
+        "vendor/kokoro/vocab.json",
+        "vendor/cmudict/*",
+        "src/pdf/*.js",
+        "src/pdf/viewer.html",
+        "vendor/pdfjs/*",
+        "src/welcome/welcome.html",
+        "src/options/options.html"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "assets/icon-16.png",
+    "32": "assets/icon-32.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  }
+}
