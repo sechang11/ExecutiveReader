@@ -636,6 +636,27 @@ untouched, and watching it fail: resolving the vocabulary contradiction on
 paper, editing the contract, and making the viewer hand a whole page to the
 segmenter.
 
+One of the four was wrong in a way worth keeping. The layout premise first
+searched `pdf/viewer.js` for the literal string `split(/
+{2,}/)`. That checks
+the *spelling* of the behaviour, not the behaviour: reformat the regex, extract
+it to a constant, change the flags, and the premise fails while the reasoning is
+untouched. The desktop half pointed out why that is worse than neutral — a
+premise that cries wolf trains exactly the lazy repair the failure message warns
+against, faster than anything else could.
+
+Fixing it meant moving the rule rather than rewriting the check. Paragraph
+splitting is now `toParagraphs` in `pdf/layout.js`, beside the function whose
+blank lines it consumes, so the premise can call it. Two things fell out that
+were already wrong: the rule had been inline in a page script, where nothing
+could test it, and `pdf-layout.test.mjs` therefore held a *copy* of the regex
+with a comment saying it mirrored the viewer. A second copy of a rule, in the
+test that exists to protect it.
+
+Verified both directions: replacing the split with `[text]` fails the premise;
+reformatting it across four lines does not. **A premise that matches source text
+is a premise about the source text.**
+
 Its limits, because overstating them would be the same error again. It catches
 only reasoning that was *expressible* — "this shape never occurs in production"
 is; "neither behaviour is obviously wrong" is not. And the lazy repair is to

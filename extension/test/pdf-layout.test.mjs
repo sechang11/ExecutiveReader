@@ -10,7 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  groupLines, findColumns, pageLines, linesToText, furnitureFilter,
+  groupLines, findColumns, pageLines, linesToText, furnitureFilter, toParagraphs,
 } from '../src/pdf/layout.js';
 
 /** Build a text item the way PDF.js reports one. */
@@ -160,8 +160,10 @@ test('rejoined paragraphs carry no line breaks into the page', () => {
 
   const text = linesToText(lines);
 
-  // The viewer's own rule, mirrored: src/pdf/viewer.js splits on /\n{2,}/.
-  const paragraphs = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  // The viewer's own rule, called rather than mirrored. This test used to hold
+  // a copy of the regex with a comment saying it matched viewer.js — a second
+  // copy of a rule, which is the drift this project keeps finding elsewhere.
+  const paragraphs = toParagraphs(text);
 
   assert.equal(paragraphs.length, 2, 'the paragraph break was not detected');
   assert.equal(paragraphs[0],

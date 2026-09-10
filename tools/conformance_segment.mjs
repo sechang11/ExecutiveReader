@@ -32,6 +32,10 @@ const { segment, loadAbbreviations } = await import(
   pathToFileURL(join(root, 'extension', 'src', 'core', 'segment.js')).href);
 const { normalize, loadNormalization } = await import(
   pathToFileURL(join(root, 'extension', 'src', 'core', 'normalize.js')).href);
+// For the layout group's premise, which asserts the behaviour that makes that
+// whole group tolerable rather than the source text that implements it.
+const { toParagraphs } = await import(
+  pathToFileURL(join(root, 'extension', 'src', 'pdf', 'layout.js')).href);
 
 // Both sets start empty and the extension fills them at runtime from the
 // shared file. Skipping this compares a loaded Python segmenter against an
@@ -130,11 +134,18 @@ const KNOWN = new Map([
     // decided in a file with nothing to do with this one, which is exactly the
     // distance that let the last expired reason survive.
     premise: {
-      describe: 'extension/src/pdf/viewer.js still splits paragraphs on blank '
-        + 'lines, so the segmenter never receives a newline from the PDF path',
-      holds: () => readFileSync(
-        join(root, 'extension', 'src', 'pdf', 'viewer.js'), 'utf8',
-      ).includes('split(/\\n{2,}/)'),
+      describe: 'the PDF path still turns a paragraph break into a separate '
+        + 'block, so the segmenter never receives a newline from it',
+      // Calls the behaviour rather than matching its source text. The first
+      // version searched viewer.js for the literal `split(/\n{2,}/)`, which
+      // the desktop half pointed out would fail on a reformat while the
+      // reasoning was untouched — and a premise that cries wolf trains exactly
+      // the lazy repair the failure message warns against. The rule moved out
+      // of the viewer into layout.js so this could call it.
+      holds: () => {
+        const paras = toParagraphs('One.\n\nTwo.');
+        return paras.length === 2 && paras.every((p) => !/[\r\n]/.test(p));
+      },
     },
   }],
   ['heading then body', {
@@ -268,9 +279,27 @@ const stale = [...KNOWN.keys()].filter((name) => !matchedKnown.has(name));
  * procedure.
  *
  * So an entry may carry a `premise`: the claim its acceptability rests on,
- * written as a predicate over the corpus rather than as prose. Prose cannot be
- * checked; a predicate can. An entry without one is not wrong, it just has
- * nothing here to check.
+ * written as a predicate rather than as prose. Prose cannot be checked; a
+ * predicate can. An entry without one is not wrong, it just has nothing here
+ * to check.
+ *
+ * The predicate may read anything the reason actually depends on. This was
+ * first written as "a predicate over the corpus", which was too narrow within a
+ * day: the premises that matter most rest on a sentence in a *different file* —
+ * the output contract, the vocabulary document, another half's source — and
+ * that distance is exactly what let the last expired reason survive. A premise
+ * that could not reach across it would have to be written as prose again, which
+ * is the thing that expired.
+ *
+ * Two limits, because overstating this would be the same error again. It only
+ * catches reasoning a predicate can express: "this is rare" and "that file
+ * still says X" can be checked, "neither behaviour is obviously wrong" cannot.
+ * And the lazy repair is to edit the predicate until it passes, which is why
+ * the failure message says not to. It converts a class of silent expiry into a
+ * loud one. It does not convert judgement into arithmetic.
+ *
+ * A premise that throws counts as not holding. Letting the exception pass would
+ * make a premise referencing a deleted file the safest kind to write.
  */
 const brokenPremise = [];
 for (const [name, entry] of KNOWN) {

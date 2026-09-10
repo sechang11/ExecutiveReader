@@ -8,6 +8,7 @@
  */
 
 import { extractPdf } from './extract.js';
+import { toParagraphs } from './layout.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -64,10 +65,12 @@ async function run() {
     marker.textContent = `Page ${page.page}`;
     section.append(marker);
 
-    for (const para of page.text.split(/\n{2,}/)) {
-      if (!para.trim()) continue;
+    // One element per paragraph is what keeps a line break out of the
+    // segmenter, so the rule lives in layout.js beside the function that
+    // produces the blank lines, and is tested and depended on from there.
+    for (const para of toParagraphs(page.text)) {
       const p = document.createElement('p');
-      p.textContent = para.trim();
+      p.textContent = para;
       section.append(p);
     }
     frag.append(section);

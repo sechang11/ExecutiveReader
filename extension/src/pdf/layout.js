@@ -168,6 +168,32 @@ export function linesToText(lines) {
 }
 
 /**
+ * Split a page's text into paragraphs.
+ *
+ * The other half of `linesToText`, and the reason the extension's segmenter
+ * never sees a line break: that function marks a paragraph boundary with a
+ * blank line, and this turns each one into its own block for the viewer to
+ * render as a `<p>`.
+ *
+ * Exported, and living here beside the function whose output it consumes,
+ * rather than inline in the viewer where it began. Two reasons, both learned
+ * rather than designed. A rule inline in a page script cannot be tested, so
+ * `pdf-layout.test.mjs` had a copy of this regex with a comment saying it
+ * mirrored the viewer — a second copy of a rule, which is the drift this
+ * project keeps finding. And `conformance_segment.mjs` records the whole
+ * newline divergence as tolerable *because* of this behaviour, so its premise
+ * has to check the behaviour; when it could only reach the inline version it
+ * matched the source text instead, and would have failed on a reformat while
+ * the reasoning was untouched.
+ *
+ * @param {string} text output of linesToText
+ * @returns {string[]} non-empty paragraphs, trimmed
+ */
+export function toParagraphs(text) {
+  return text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+}
+
+/**
  * Lines that repeat at the same height across pages are running heads and page
  * furniture. Reading "Chapter Four   17" between every paragraph is the single
  * most irritating thing a PDF reader can do.
