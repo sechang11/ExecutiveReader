@@ -427,3 +427,41 @@ The reply to that report could have been this paragraph. Instead it is two tests
 `pdf-layout.test.mjs` asserting no rejoined paragraph does. Prose explaining why
 a defect cannot be reached is exactly the kind of true-sounding claim section 19
 is about, and it stops being true the day someone adds a third input path.
+
+## 26. A flag nobody reads is worse than a flag nobody set
+
+`shared/normalization.json` carried a `collapse` section — `smart_quotes_to_plain`,
+`soft_hyphens`, `zero_width`, `footnote_markers`, `dot_leaders`,
+`repeated_punctuation`, `emoji` — every flag set, for the whole of the project.
+Neither half read it. The extension's normalizer implemented expansions,
+currency and symbols and stopped.
+
+What that cost is not tidiness. The phonemizer looks words up in CMUdict by
+literal text, so a word carrying a curly apostrophe misses its entry and falls
+through to the letter rules. Measured on the shipped dictionary:
+
+| written | spoken |
+|---|---|
+| `don’t` | dawn tee |
+| `it’s` | it ess |
+| `won{soft hyphen}derful` | wun DERful |
+
+Nearly every professionally typeset page uses curly apostrophes. This was most
+contractions on most articles, in the neural voices that are the entire pitch.
+
+Three things kept it invisible. The extension's own tests used straight quotes,
+because they were typed in a code editor. `conformance.mjs` never called the
+full `normalize()`, only the three stages that were implemented. And its corpus
+contained no curly quotes, no soft hyphens and no dashes — so a seven-character
+difference between the two normalizers sat next to a passing cross-language
+harness for weeks.
+
+**A specification the code does not read is not a specification, it is a
+comment.** The `collapse` keys looked exactly like the `symbols` and
+`expansions` keys beside them, which are read. Nothing distinguished decoration
+from contract, and nothing failed.
+
+The scan that would have caught it is the same one this file keeps arriving at
+from other directions: for each key in a shared file, does any consumer
+reference it? The extension now implements every key in `collapse`, and each has
+a definition in `_collapse_rules` precise enough for both halves to converge on.

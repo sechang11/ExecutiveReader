@@ -86,7 +86,7 @@
       "when": "always"
     }
   ],
-  "_output_contract": "After the symbol stage, collapse runs of spaces and tabs to a single space and trim the ends. Newlines are left alone. Without this the two implementations produce the same speech from different strings — one pads every replacement, the other pads only where needed — and a cross-language check can then only ever assert equivalence, never equality. It also matters for anything mapping offsets through normalization, where a stray double space shifts every position after it.",
+  "_output_contract": "Pipeline order: collapse (typographic), then expansions, then currency, then symbols. After the symbol stage, collapse runs of spaces and tabs to a single space and trim the ends. Newlines are left alone. Without this the two implementations produce the same speech from different strings — one pads every replacement, the other pads only where needed — and a cross-language check can then only ever assert equivalence, never equality. It also matters for anything mapping offsets through normalization, where a stray double space shifts every position after it.",
   "_currency_note": "Currency symbols are prefixes in text but suffixes in speech: $50 is spoken 'fifty dollars', not 'dollars fifty'. That reordering is why they cannot live in the symbols list above. Applies only when a number follows.",
   "currency": [
     {
@@ -191,7 +191,10 @@
     "smart_quotes_to_plain": true,
     "soft_hyphens": true,
     "dot_leaders": true,
-    "footnote_markers": true
+    "footnote_markers": true,
+    "nbsp_to_space": true,
+    "dashes_to_plain": true,
+    "em_dash_to_comma": true
   },
   "_numbers_note": "Flags only. Each side owns the algorithm; this file owns whether it runs. Prose descriptions are here as _examples so neither side has to guess what the flag means.",
   "numbers": {
@@ -217,5 +220,19 @@
       "announce": "say 'code block, twelve lines' and skip",
       "skip": "say nothing"
     }
+  },
+  "_collapse_note": "Typographic cleanup, applied FIRST, before expansions. It has to run first: every later rule matches literal text, and a curly apostrophe or a soft hyphen sitting inside a word defeats them, and defeats the pronunciation dictionary after them. Measured on the shipped CMUdict, 'don’t' with a curly apostrophe phonemises as 'dawn tee' and 'won­derful' with a soft hyphen as 'wun DERful'. Almost every professionally typeset page uses curly apostrophes, so this was most contractions on most articles.",
+  "_collapse_rules": {
+    "zero_width": "Remove U+200B, U+200C, U+200D, U+2060 and U+FEFF. They are invisible and split words for anything matching literal text.",
+    "soft_hyphens": "Remove U+00AD. It is a rendering hint, never a spoken hyphen.",
+    "smart_quotes_to_plain": "U+201C U+201D U+201E U+201F and U+2033 become a straight double quote; U+2018 U+2019 U+201A U+201B and U+2032 become a straight apostrophe. Guillemets are deliberately left alone: they are not English quoting and mapping them would be a guess.",
+    "nbsp_to_space": "U+00A0, U+202F and U+2007 become an ordinary space, which the output contract then collapses. They are not spaces or tabs, so the contract does not reach them.",
+    "dashes_to_plain": "U+2013 en dash, U+2012 figure dash and U+2015 horizontal bar become a hyphen.",
+    "em_dash_to_comma": "U+2014, together with any spaces or tabs on either side of it, becomes a comma and a space. Absorbing the spaces matters: replacing the character alone turns 'left — quickly' into 'left , quickly', with the comma floating away from the word it belongs to. This rule has speech content rather than being cleanup: the engines have no phoneme for a dash and drop it silently, so the pause the author wrote disappears.",
+    "footnote_markers": "Remove superscript digits U+00B9, U+00B2, U+00B3 and U+2070-U+2079. Bracketed markers like [1] are deliberately NOT removed: they are indistinguishable from a citation the reader may want.",
+    "dot_leaders": "A run of four or more periods, optionally separated by spaces, becomes a single space. Table-of-contents leaders, not punctuation. Runs of two or three are left to repeated_punctuation below.",
+    "repeated_punctuation": "A run of two or more of the SAME terminator (. ! ?) becomes one. Applied after dot_leaders, so a leader run is already gone.",
+    "emoji": "'skip' removes emoji; 'read' leaves them for the engine. Extended pictographic characters only, so ordinary symbols handled by the symbols list above are untouched.",
+    "_order": "zero_width, soft_hyphens, smart_quotes_to_plain, nbsp_to_space, dashes_to_plain, em_dash_to_comma, footnote_markers, dot_leaders, repeated_punctuation, emoji. Both halves apply them in this order; two of them interact, so the order is part of the contract."
   }
 }

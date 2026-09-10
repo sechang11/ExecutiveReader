@@ -24,8 +24,71 @@ const isWordChar = (c) => c !== undefined && /[A-Za-z0-9]/.test(c);
 const isSpace = (c) => c !== undefined && /\s/.test(c);
 const isDigit = (c) => c !== undefined && /[0-9]/.test(c);
 
+/**
+ * Typographic cleanup, defined by `collapse` and `_collapse_rules`.
+ *
+ * This section sat in the shared file, set to true, read by neither half, for
+ * the whole of the project so far. What it cost is not subtle: the phonemizer
+ * looks words up in CMUdict by literal text, so a curly apostrophe or a soft
+ * hyphen inside a word misses the entry and the fallback letter rules take
+ * over. Measured on the shipped dictionary:
+ *
+ *     don’t         -> dˈɑːn tˈiː     ("dawn tee")
+ *     it’s          -> ˈɪt ˈɛs        ("it ess")
+ *     won{shy}derful-> wˈʌn ˈdɛɹfʌl   ("wun DERful")
+ *
+ * Nearly every professionally typeset page uses curly apostrophes, so this was
+ * most contractions on most articles, in the neural voices that are the whole
+ * pitch. It was found by the desktop half's conformance harness noticing that
+ * the two normalizers disagreed — which is exactly the value of the harness,
+ * since neither side's own tests could see it.
+ *
+ * Order is part of the contract; see `_collapse_rules._order`.
+ * @type {Record<string, any>}
+ */
+let COLLAPSE = {};
+
+/** Characters that are invisible and split a word for anything matching text. */
+const ZERO_WIDTH = /[​‌‍⁠﻿]/g;
+const SOFT_HYPHEN = /­/g;
+const DOUBLE_QUOTES = /[“”„‟″]/g;
+const SINGLE_QUOTES = /[‘’‚‛′]/g;
+const HARD_SPACES = /[   ]/g;
+const PLAIN_DASHES = /[‒–―]/g;
+/** Spaces either side are absorbed, or "left — quickly" becomes "left , quickly"
+ *  with the comma floating away from the word it belongs to. */
+const EM_DASH = /[ \t]*—[ \t]*/g;
+const SUPERSCRIPT_DIGITS = /[¹²³⁰-⁹]/g;
+/** Four or more periods, optionally spaced: a table-of-contents leader. */
+const DOT_LEADER = /(?:\.[ \t]*){4,}/g;
+const REPEATED_TERMINATOR = /([.!?])\1+/g;
+const EMOJI = /\p{Extended_Pictographic}/gu;
+
+/** @param {string} text */
+export function applyCollapse(text) {
+  let out = text;
+  if (COLLAPSE.zero_width) out = out.replace(ZERO_WIDTH, '');
+  if (COLLAPSE.soft_hyphens) out = out.replace(SOFT_HYPHEN, '');
+  if (COLLAPSE.smart_quotes_to_plain) {
+    out = out.replace(DOUBLE_QUOTES, '"').replace(SINGLE_QUOTES, "'");
+  }
+  if (COLLAPSE.nbsp_to_space) out = out.replace(HARD_SPACES, ' ');
+  if (COLLAPSE.dashes_to_plain) out = out.replace(PLAIN_DASHES, '-');
+  // Not cleanup. The engines have no phoneme for a dash and drop it in
+  // silence, so the pause the author wrote disappears; a comma restores it.
+  if (COLLAPSE.em_dash_to_comma) out = out.replace(EM_DASH, ', ');
+  if (COLLAPSE.footnote_markers) out = out.replace(SUPERSCRIPT_DIGITS, '');
+  // Before repeated_punctuation, which would otherwise turn a leader into a
+  // single period and make it look like the end of a sentence.
+  if (COLLAPSE.dot_leaders) out = out.replace(DOT_LEADER, ' ');
+  if (COLLAPSE.repeated_punctuation) out = out.replace(REPEATED_TERMINATOR, '$1');
+  if (COLLAPSE.emoji === 'skip') out = out.replace(EMOJI, '');
+  return out;
+}
+
 /** @param {any} data parsed shared/normalization.json */
 export function loadNormalization(data) {
+  COLLAPSE = data.collapse ?? {};
   // Longest first, so "w/o" wins over "w/" and "et al." over any prefix.
   EXPANSIONS = [...(data.expansions ?? [])]
     .sort((a, b) => b.match.length - a.match.length);
@@ -154,5 +217,8 @@ export function applySymbols(text) {
 
 /** The full pipeline, in the order the schema mandates. @param {string} text */
 export function normalize(text) {
-  return applySymbols(applyCurrency(applyExpansions(text)));
+  // Collapse first, and it has to be first: everything after it matches literal
+  // text, and so does the pronunciation dictionary after that. A curly
+  // apostrophe inside a word defeats all of them.
+  return applySymbols(applyCurrency(applyExpansions(applyCollapse(text))));
 }

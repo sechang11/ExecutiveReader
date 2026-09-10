@@ -17,12 +17,29 @@
  * Run: node tools/conformance_anchor.mjs
  */
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { capture, locate } = await import(
   pathToFileURL(join(root, 'extension', 'src', 'core', 'anchor.js')).href);
+const { normalize, loadNormalization } = await import(
+  pathToFileURL(join(root, 'extension', 'src', 'core', 'normalize.js')).href);
+
+loadNormalization(JSON.parse(
+  readFileSync(join(root, 'shared', 'normalization.json'), 'utf8')));
+
+/**
+ * Model what an anchor is actually built from.
+ *
+ * A segment reaching the anchor layer is always normaliser output, never raw
+ * page text. Anchoring raw text compares the two halves at a point production
+ * never reaches, and three of the disagreements this harness first reported
+ * were exactly that: a newline, a non-breaking space and a curly apostrophe
+ * that the normaliser had already resolved on at least one side.
+ */
+const asSegments = (lines) => lines.map(normalize);
 
 const BASE = [
   'Introduction to the topic.',
@@ -135,11 +152,39 @@ const CASES = [
  * to call it, which decides what the user is told about how much to trust it.
  */
 const KNOWN = new Map([
+  // Not an anchor disagreement, and the diagnosis above it was right: these
+  // were the two halves holding different TEXT for the same page, with the
+  // anchor layer merely where it became visible.
+  //
+  // Two of the three are now gone. `collapse` in shared/normalization.json —
+  // smart quotes, soft hyphens, zero-width characters, dashes, footnote
+  // markers — had every flag set and was read by neither half for the whole of
+  // the project. The extension now implements it, against definitions written
+  // into `_collapse_rules` so both halves can converge on the same ones, and
+  // the non-breaking space and curly apostrophe cases went identical.
+  //
+  // It was not only an anchor question. The phonemizer looks words up in
+  // CMUdict by literal text, so on the extension "don't" with a curly
+  // apostrophe was pronounced "dawn tee" — most contractions on most
+  // professionally typeset pages, in the neural voices that are the pitch.
+  //
+  // The newline survives because the contract says in as many words that
+  // newlines are left alone, and because they are load-bearing for the desktop
+  // half, whose segmenter splits on them. That makes it the same structural
+  // difference as the layout group in conformance_segment.mjs rather than a
+  // bug in either side.
   ['ws: newline instead of space', { python: 'exact', js: 'fuzzy' }],
-  ['ws: non-breaking space', { python: 'exact', js: 'fuzzy' }],
+
+  // These two are the real question, and the vocabulary answers it twice.
+  // The summary table calls exact "character for character"; the section below
+  // it says "if the sentence is present word for word, the position is
+  // correct". A sentence that differs only in capitalisation satisfies one and
+  // not the other, which is the whole of the disagreement.
+  //
+  // docs/anchor-vocabulary.md says neither half changes the contract alone, so
+  // this goes to the user rather than to whichever of us edits first.
   ['case: sentence recapitalised', { python: 'exact', js: 'fuzzy' }],
   ['case: one word recapitalised', { python: 'exact', js: 'fuzzy' }],
-  ['punctuation: curly apostrophe', { python: 'boundary', js: 'fuzzy' }],
 ]);
 
 const py = process.env.EXECUTIVE_READER_PYTHON
@@ -159,8 +204,9 @@ CASES.forEach((c, i) => {
   // locate is handed the current one. Passing null instead would compare the
   // two halves' opinions about unstamped legacy anchors, which is a different
   // question from whether the ladder agrees.
-  const anchor = capture(c.before, c.index, 'stamp-1');
-  const js = locate(anchor, c.after, c.rulesChanged ? 'stamp-2' : 'stamp-1');
+  const anchor = capture(asSegments(c.before), c.index, 'stamp-1');
+  const js = locate(anchor, asSegments(c.after),
+                    c.rulesChanged ? 'stamp-2' : 'stamp-1');
   const p = pyOut[i];
 
   if (js.index === p.index && js.how === p.how && js.verified === p.verified) {

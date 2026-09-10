@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  loadNormalization, applySymbols, applyCurrency, applyExpansions,
+  loadNormalization, applySymbols, applyCurrency, applyExpansions, applyCollapse,
 } from '../extension/src/core/normalize.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -32,6 +32,14 @@ loadNormalization(JSON.parse(
 
 /** Inputs chosen to hit each condition and each way it is known to fail. */
 const CASES = [
+  // typographic: the characters a professionally typeset page actually uses.
+  // The corpus had none of these, which is how a seven-character difference
+  // between the two normalizers sat unseen next to a passing harness. They
+  // must survive the stages below untouched on both sides; what each half
+  // does with them belongs to the collapse stage.
+  'don’t stop', 'it’s “fine” here', 'won­derful', 'won​derful',
+  '1914–1918', 'He left — quickly.', 'the cat', 'claimed¹ that',
+  'Wait... what?', 'Chapter 1......5', '«bonjour»',
   // survival: these must come through untouched
   'R&D', 'C++', 'x && y', 'key=value', 'a==b', 'C#', '#hashtag', '## Heading',
   'me@example.com', '@someone', '~/home/user', '%s and %d', 'x += 1',
@@ -78,12 +86,37 @@ const jsOut = {
   currency: CASES.map(applyCurrency),
   symbols: CASES.map(applySymbols),
   both: CASES.map((c) => applySymbols(applyCurrency(c))),
+  collapse: CASES.map(applyCollapse),
 };
 
 /** Stages are compared individually, not just end to end. A disagreement can
  *  cancel out across a full pipeline and hide; comparing per stage is what
  *  surfaced the tidy() placement difference. */
 const STAGES = ['expansions', 'currency', 'symbols', 'both'];
+
+/**
+ * The typographic stage, compared only once the Python half exposes it.
+ *
+ * `collapse` in shared/normalization.json — smart quotes, soft hyphens,
+ * zero-width characters, dashes, footnote markers — was set to true and read by
+ * neither half for the whole of the project. That cost real pronunciation: the
+ * phonemizer looks words up by literal text, so "don’t" with a curly
+ * apostrophe missed CMUdict and came out as "dawn tee".
+ *
+ * The extension now implements it, against the definitions written into
+ * `_collapse_rules`. The desktop half does the same work inline inside its own
+ * normalize(), mixed with markdown and table-of-contents handling that has no
+ * counterpart here, so there is nothing to call yet.
+ *
+ * This is announced rather than silently skipped, and it disappears the moment
+ * conformance_py.py adds the key. A stage that quietly compares nothing is the
+ * failure this harness exists to prevent.
+ */
+if (pyOut.collapse) STAGES.push('collapse');
+else {
+  console.log('note: the collapse stage is not compared; conformance_py.py does '
+    + 'not expose one yet. See _collapse_rules in shared/normalization.json.');
+}
 
 const squash = (s) => s.replace(/\s+/g, ' ').trim();
 

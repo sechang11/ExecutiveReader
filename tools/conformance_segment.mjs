@@ -100,10 +100,18 @@ const KNOWN = new Map([
   // The extension treats a newline as an ordinary character, so a heading and
   // the paragraph under it arrive as one segment with the break inside it.
   //
-  // The desktop behaviour is the one that reads well aloud, and the extension
-  // gets away without it because the DOM already separates the elements it
-  // reads. It does not get away with it on a PDF, which is why it vendors
-  // pdf.js. This is the largest group here and the one worth resolving first.
+  // Checked on both sides since this was written, and it is structural rather
+  // than a defect in either half. Newlines survive the desktop normaliser and
+  // reach its segmenter from OCR, the clipboard, window text and PDF, so its
+  // line handling is load-bearing. Nothing reaches the extension's segmenter
+  // with a newline in it: extractBlocks collapses every whitespace run inside a
+  // block, and pdf/layout.js rejoins hard-wrapped lines using the gap between
+  // baselines — the only place that decision can be made correctly — after
+  // which pdf/viewer.js renders one paragraph element per break.
+  //
+  // So this group is unreachable on the extension side rather than latent, and
+  // asserted to be: tools/domtest/ checks no block text carries a line break,
+  // and pdf-layout.test.mjs checks no rejoined paragraph does.
   ['two lines, no terminator', {
     python: ['Line one.', 'Line two'],
     js: ['Line one\nLine two'],
@@ -120,6 +128,22 @@ const KNOWN = new Map([
     python: ['First item.', 'Second item.'],
     js: ['- First item.', '- Second item.'],
   }],
+  // Two things at once, recorded exactly as it behaves today rather than as it
+  // will behave. `list_markers` in shared/abbreviations.json is implemented on
+  // the extension side only so far, which is why the extension keeps its first
+  // item whole and the desktop keeps none. When the Python side lands, this
+  // entry goes stale and the harness will say so.
+  //
+  // What will remain after that is the same structural difference as the group
+  // above. The rule is anchored at position zero because both halves segment
+  // one block or line at a time in production, which is exactly where a marker
+  // sits. This harness hands the extension all three lines as ONE string, a
+  // shape it never receives, so only the first marker is at position zero.
+  ['numbered list', {
+    python: ['1.', 'Preheat the oven.', '2.', 'Butter the tin.', '3.', 'Bake it.'],
+    js: ['1. Preheat the oven.', '2.', 'Butter the tin.', '3.', 'Bake it.'],
+  }],
+
   ['markdown table', {
     python: ['| Path | Size |', '| vendor/pdfjs | 1.7 MB |', 'After the table.'],
     js: ['| Path | Size |\n|---|---|\n| vendor/pdfjs | 1.7 MB |\n\nAfter the table.'],
@@ -130,9 +154,20 @@ const KNOWN = new Map([
   // stage is covered by conformance.mjs, which stops at symbols, currency and
   // expansions. The desktop half collapses a run of periods and reads a link
   // as its domain; the extension does neither.
+  // The extension now implements the shared `collapse` section, so the two
+  // normalizers agree on the text: "Wait... " becomes "Wait. " on both sides.
+  // What is left is narrower, and purely segmentation. A period followed by a
+  // LOWERCASE word is not a sentence end in ordinary prose, and the desktop
+  // half declines to split there. This half consults that evidence only for
+  // tokens it already classes as possible abbreviations, so an ordinary period
+  // splits regardless of what follows.
+  //
+  // Neither behaviour is obviously wrong, and outside a collapsed ellipsis the
+  // case is rare, which is why it is recorded rather than chased. Resolving it
+  // means one rule in both engines, like the ordinal-marker rule.
   ['ellipsis mid sentence', {
     python: ['Wait. what happened?'],
-    js: ['Wait...', 'what happened?'],
+    js: ['Wait.', 'what happened?'],
   }],
   ['url with dots', {
     python: ['Visit link to example.com for more.', 'Then leave.'],
@@ -143,7 +178,7 @@ const KNOWN = new Map([
   // Punctuation with no words in it. The desktop drops it, the extension keeps
   // it and would speak it. Harmless either way, listed so it is not mistaken
   // for a new problem later.
-  ['terminator only', { python: [], js: ['...'] }],
+  ['terminator only', { python: [], js: ['.'] }],
 ]);
 
 const py = process.env.EXECUTIVE_READER_PYTHON

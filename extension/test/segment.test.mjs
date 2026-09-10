@@ -97,3 +97,40 @@ test('handles empty and whitespace input', () => {
   assert.deepEqual(texts(''), []);
   assert.deepEqual(texts('   \n  '), []);
 });
+
+/**
+ * List markers.
+ *
+ * Both halves split after the number in "1. First item", so every numbered list
+ * was spoken as "one." pause "First item" — the pause landing between the
+ * number and the thing it numbers. Found by the desktop half; the rule is
+ * shared, so neither side could fix it alone without manufacturing a new
+ * divergence.
+ *
+ * Anchored at position zero, which is safe because both halves segment one
+ * block or line at a time, so that is exactly where a marker sits.
+ */
+test('a numbered list item is one sentence, not a number and a sentence', () => {
+  assert.deepEqual(texts('1. First item.'), ['1. First item.']);
+  assert.deepEqual(texts('27. Twenty-seventh item.'), ['27. Twenty-seventh item.']);
+});
+
+test('a lettered list item is one sentence too', () => {
+  // The initials rule does not cover this: it only ever matched a capital,
+  // because it was written for "J. R. R. Tolkien".
+  assert.deepEqual(texts('a. Lettered item.'), ['a. Lettered item.']);
+  assert.deepEqual(texts('B. Another item.'), ['B. Another item.']);
+});
+
+test('a marker only counts at the start, so it cannot fire mid-sentence', () => {
+  // The known limit, pinned deliberately: "Step 1. Preheat" still splits. That
+  // is the price of a rule that can never fire inside a sentence, and it is
+  // recorded in shared/abbreviations.json rather than left to be rediscovered.
+  assert.deepEqual(texts('Step 1. Preheat the oven.'), ['Step 1.', 'Preheat the oven.']);
+  assert.deepEqual(texts('It cost 5. Then more.'), ['It cost 5.', 'Then more.']);
+  assert.deepEqual(texts('The grade was a. Then more.'), ['The grade was a.', 'Then more.']);
+});
+
+test('initials still work, and outrank nothing they used to', () => {
+  assert.deepEqual(texts('J. R. R. Tolkien wrote it.'), ['J. R. R. Tolkien wrote it.']);
+});

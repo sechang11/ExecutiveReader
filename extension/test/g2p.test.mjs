@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import * as G from '../src/engines/kokoro/g2p-en.js';
+import { normalize, loadNormalization } from '../src/core/normalize.js';
 
 const vocab = JSON.parse(
   readFileSync(new URL('../vendor/kokoro/vocab.json', import.meta.url), 'utf8'),
@@ -22,6 +23,10 @@ const entries = G.loadDict(
 );
 G.loadHomographs(JSON.parse(
   readFileSync(new URL('../vendor/cmudict/homographs.json', import.meta.url), 'utf8'),
+));
+
+loadNormalization(JSON.parse(
+  readFileSync(new URL('../src/shared/normalization.json', import.meta.url), 'utf8'),
 ));
 
 test('the vendored dictionary loaded', () => {
@@ -143,4 +148,41 @@ test('punctuation survives and is not spaced away from its word', () => {
   const { ipa } = G.phonemize('Yes, really.');
   assert.ok(ipa.includes(','), 'the model alphabet includes punctuation');
   assert.ok(!/\s,/.test(ipa), 'a comma must not float away from its word');
+});
+
+/**
+ * Why typographic collapse is a pronunciation feature, not tidying.
+ *
+ * The dictionary is keyed by literal text. A word carrying a curly apostrophe
+ * or a soft hyphen misses its entry and falls through to the letter rules,
+ * which produce something a listener hears immediately as wrong. These assert
+ * the failure is real, so that if anyone ever removes the collapse stage as
+ * cosmetic, the reason it exists is written down in the place that proves it.
+ */
+test('a curly apostrophe defeats the dictionary, and the straight one does not', () => {
+  const straight = G.phonemize("don't").ipa;
+  const curly = G.phonemize('don’t').ipa;
+
+  assert.notEqual(curly, straight);
+  // Not merely different: the fallback reads the fragments as separate words.
+  assert.ok(!straight.includes(' '), `expected one word, got ${straight}`);
+  assert.ok(curly.includes(' '), `expected the broken form to split, got ${curly}`);
+});
+
+test('a soft hyphen defeats the dictionary the same way', () => {
+  const plain = G.phonemize('wonderful').ipa;
+  const shy = G.phonemize('won­derful').ipa;
+
+  assert.notEqual(shy, plain);
+  assert.ok(!plain.includes(' '));
+  assert.ok(shy.includes(' '), `expected the broken form to split, got ${shy}`);
+});
+
+test('normalized text reaches the dictionary intact', () => {
+  // The whole point of the collapse stage, stated as the property that matters:
+  // after normalization, the typeset form pronounces identically to the plain
+  // one. If this fails, contractions are being mispronounced on real pages.
+  for (const [typeset, plain] of [['don’t', "don't"], ['it’s', "it's"], ['won­derful', 'wonderful']]) {
+    assert.equal(G.phonemize(normalize(typeset)).ipa, G.phonemize(plain).ipa, typeset);
+  }
 });

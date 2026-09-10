@@ -37,8 +37,21 @@ let MAYBE = new Set();
 /** Groups in shared/abbreviations.json whose members never end a sentence. */
 const NEVER_GROUPS = new Set(['titles', 'military']);
 
+/**
+ * Whether a leading "1." is a list marker rather than a sentence.
+ *
+ * See `_list_markers` in shared/abbreviations.json. Both halves segment one
+ * block or line at a time, so position zero is exactly where a list marker
+ * sits and nowhere else, which is what makes the rule safe.
+ */
+let LIST_DIGITS_AT_START = false;
+let LIST_LETTER_AT_START = false;
+
 /** @param {Record<string, unknown>} data parsed shared/abbreviations.json */
 export function loadAbbreviations(data) {
+  const markers = /** @type {any} */ (data.list_markers) ?? {};
+  LIST_DIGITS_AT_START = Boolean(markers.digits_at_start);
+  LIST_LETTER_AT_START = Boolean(markers.single_letter_at_start);
   const never = new Set();
   const maybe = new Set();
   for (const [key, list] of Object.entries(data)) {
@@ -71,6 +84,19 @@ function classifyPeriod(text, i) {
   while (s > 0 && /[^\s]/.test(text[s - 1])) s--;
   const word = text.slice(s, i);
   const lower = word.toLowerCase();
+
+  // A list marker: digits only, and sitting at the very start of the text
+  // being segmented. Without this every numbered list is spoken as "one."
+  // pause "First item" — the pause landing between the number and the thing
+  // it numbers. Anchored at the start so it can never fire mid-sentence;
+  // "Step 1. Preheat" therefore still splits, which is the price and is
+  // recorded as a known limit in the rules file.
+  // The letter half is not covered by the initials rule below: that only ever
+  // matched a CAPITAL, because it was written for "J. R. R. Tolkien". Widening
+  // it would also stop splitting a sentence that genuinely ends in a lone
+  // letter, so this stays anchored at the start instead.
+  if (s === 0 && LIST_DIGITS_AT_START && /^\d+$/.test(word)) return 'never';
+  if (s === 0 && LIST_LETTER_AT_START && /^[A-Za-z]$/.test(word)) return 'never';
 
   // A single capital is an initial: "J. R. R. Tolkien". The next initial is
   // also capitalised, so this must outrank the new-sentence check.
