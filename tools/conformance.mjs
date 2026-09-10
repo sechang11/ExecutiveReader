@@ -40,6 +40,7 @@ const CASES = [
   'don’t stop', 'it’s “fine” here', 'won­derful', 'won​derful',
   '1914–1918', 'He left — quickly.', 'the cat', 'claimed¹ that',
   'Wait... what?', 'Chapter 1......5', '«bonjour»',
+  'as Smith showed [1] the result holds',
   // survival: these must come through untouched
   'R&D', 'C++', 'x && y', 'key=value', 'a==b', 'C#', '#hashtag', '## Heading',
   'me@example.com', '@someone', '~/home/user', '%s and %d', 'x += 1',
@@ -118,10 +119,43 @@ else {
     + 'not expose one yet. See _collapse_rules in shared/normalization.json.');
 }
 
+/**
+ * Disagreements that are a decision, not a defect.
+ *
+ * The other two harnesses have had this from the start and this one has not,
+ * so a case the two halves deliberately treat differently could only be
+ * omitted from the corpus — which is how the typographic gap stayed invisible.
+ * Absent from the corpus and recorded as a divergence look identical while the
+ * check is green, and only one of them survives someone reading the file.
+ *
+ * Keyed by stage and input, holding what each side currently produces. An
+ * unlisted disagreement fails; a listed one that stops happening also fails,
+ * so a resolution has to delete its entry rather than leave it describing
+ * something no longer true.
+ */
+const KNOWN = new Map([
+  // Empty, and worth keeping rather than deleting.
+  //
+  // It was added for the bracketed-footnote disagreement — the desktop half
+  // removes "[1]", this half keeps it — and the entry was immediately stale,
+  // because at THIS stage the two halves agree. The desktop's removal happens
+  // further along its normalize(), past everything any harness compares. So a
+  // disagreement both sides had written down and escalated was invisible to
+  // every check we have, which is the same shape as the gap that started all
+  // of this.
+  //
+  // The corpus keeps the case, so the agreement at this stage is asserted
+  // rather than assumed. The disagreement itself needs a stage that compares
+  // the full pipeline, and that is blocked on the two normalize() functions
+  // having genuinely different jobs: the desktop's also strips markdown, table
+  // of contents leaders and bullets, which have no counterpart here.
+]);
+
 const squash = (s) => s.replace(/\s+/g, ' ').trim();
 
 let identical = 0;
 let equivalent = 0;
+const matchedKnown = new Set();
 /** @type {string[]} */
 const differing = [];
 
@@ -130,6 +164,13 @@ for (const stage of STAGES) {
     const a = pyOut[stage][i];
     const b = jsOut[stage][i];
     if (a === b) { identical++; return; }
+
+    const known = KNOWN.get(`${stage} :: ${input}`);
+    if (known && known.python === a && known.js === b) {
+      matchedKnown.add(`${stage} :: ${input}`);
+      return;
+    }
+
     if (squash(a) === squash(b)) {
       equivalent++;
       return;
@@ -148,6 +189,14 @@ console.log(`  identical:  ${identical}`);
 console.log(`  equivalent: ${equivalent}  (same speech, different whitespace)`);
 console.log(`  differing:  ${differing.length}`);
 
+const stale = [...KNOWN.keys()].filter((k) => !matchedKnown.has(k));
+if (stale.length) {
+  console.error('\nListed as known divergences but they now agree:\n');
+  for (const k of stale) console.error(`  ${k}`);
+  console.error('\nDelete them from KNOWN. A list describing behaviour the code '
+    + 'no longer has is worse than no list.');
+}
+
 if (differing.length) {
   console.log('\nReal disagreements:\n');
   console.log(differing.join('\n\n'));
@@ -162,14 +211,18 @@ if (differing.length) {
  */
 const problems = [];
 if (CASES.length === 0) problems.push('no inputs; the case list is empty');
-if (identical + equivalent + differing.length !== total) {
-  problems.push(`accounted for ${identical + equivalent + differing.length} of ${total} comparisons`);
+const accounted = identical + equivalent + differing.length + matchedKnown.size;
+if (accounted !== total) {
+  problems.push(`accounted for ${accounted} of ${total} comparisons`);
 }
 // Equivalent is a failure now, not a warning. Both sides honour the output
 // contract in `_output_contract`, so identical whitespace is the expectation;
 // anything less means one side stopped applying it.
 if (equivalent > 0) problems.push(`${equivalent} whitespace-only differences; the output contract is not being honoured on one side`);
 if (differing.length) problems.push(`${differing.length} real disagreements`);
+// A recorded divergence that stopped happening has to be deleted, not left
+// describing behaviour the code no longer has.
+if (stale.length) problems.push(`${stale.length} stale entries in KNOWN`);
 
 if (problems.length) {
   console.error(`\nFAIL: ${problems.join('; ')}`);

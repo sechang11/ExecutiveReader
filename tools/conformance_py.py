@@ -33,5 +33,11 @@ out = {
     "currency": [symbols.apply_currency(c) for c in cases],
     "symbols": [symbols.apply_symbols(c) for c in cases],
     "both": [symbols.apply(c) for c in cases],
+    # The typographic stage. It was implemented on both sides before anything
+    # compared it, which is the same shape as the bug that prompted it: the
+    # `collapse` section of shared/normalization.json sat set-to-true and unread
+    # for the whole of the project. A rule both halves implement separately and
+    # nobody compares is a rule that agrees by luck.
+    "collapse": [normalize_mod.apply_collapse(c) for c in cases],
 }
 json.dump(out, sys.stdout)

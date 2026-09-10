@@ -82,7 +82,15 @@ export function applyCollapse(text) {
   // single period and make it look like the end of a sentence.
   if (COLLAPSE.dot_leaders) out = out.replace(DOT_LEADER, ' ');
   if (COLLAPSE.repeated_punctuation) out = out.replace(REPEATED_TERMINATOR, '$1');
-  if (COLLAPSE.emoji === 'skip') out = out.replace(EMOJI, '');
+  // Anything the symbols or currency lists speak is not an emoji, whatever
+  // Unicode says. ©, ® and ™ are all Extended_Pictographic, so the obvious
+  // implementation deleted them — and with them the words "copyright",
+  // "registered" and "trademark" that the symbols list exists to produce.
+  // Caught by the cross-language harness the moment this stage was compared,
+  // having passed every test on this side.
+  if (COLLAPSE.emoji === 'skip') {
+    out = out.replace(EMOJI, (ch) => (SYMBOLS.has(ch) || CURRENCY.has(ch) ? ch : ''));
+  }
   return out;
 }
 

@@ -465,3 +465,37 @@ The scan that would have caught it is the same one this file keeps arriving at
 from other directions: for each key in a shared file, does any consumer
 reference it? The extension now implements every key in `collapse`, and each has
 a definition in `_collapse_rules` precise enough for both halves to converge on.
+
+## 27. Implemented on both sides is not compared on either
+
+The `collapse` section landed in both halves within a day of each other, both
+with tests, both green. Nothing compared them. `conformance_py.py` did not
+export the stage, so `conformance.mjs` printed a polite note saying so and moved
+on — a note is not a check.
+
+Wiring the stage in took four minutes and found a real defect immediately, in
+this half, that every test here had passed:
+
+    ©2026 Acme  ->  2026 Acme
+    Widget™     ->  Widget
+
+`©`, `®` and `™` are all `Extended_Pictographic`, so `emoji: "skip"` deleted
+them, and with them the words `copyright`, `registered` and `trademark` that the
+symbols list exists to produce. The rule now excludes anything the symbols or
+currency lists speak, because those lists are the authority on what gets spoken.
+
+The comment in `_collapse_rules` had already claimed the exception — "so
+ordinary symbols handled by the symbols list above are untouched" — while the
+code did not implement it. Section 19 again, in the same file that documents it.
+
+The second finding is subtler and is why this entry exists. The bracketed
+footnote disagreement — the desktop half removes `[1]`, this half keeps it —
+was written down by both sides and escalated to the user, and is *still*
+invisible to every harness, because the desktop's removal happens further along
+its `normalize()` than any compared stage reaches. Adding the case produced
+agreement, not divergence.
+
+**A disagreement both sides have documented can still be untested.** Writing it
+down feels like handling it. `conformance.mjs` now has a `KNOWN` map like the
+other two harnesses, currently empty, with that stale entry's story kept in it —
+because the empty map is the honest record of what is not yet checkable.

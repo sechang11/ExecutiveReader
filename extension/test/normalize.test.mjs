@@ -210,3 +210,25 @@ test('the collapse stage is ordered, and the order is part of the contract', () 
   assert.equal(applyCollapse('w/o'), 'w/o');
   assert.equal(applyCollapse('R&D'), 'R&D');
 });
+
+test('a symbol the rules speak is not an emoji, whatever Unicode says', () => {
+  // ©, ® and ™ are all Extended_Pictographic, so a plain pictographic test
+  // deletes them — and with them the words the symbols list exists to produce.
+  // This passed every test on this side and was caught by the cross-language
+  // harness the first time the collapse stage was actually compared.
+  assert.equal(normalize('©2026 Acme'), 'copyright 2026 Acme');
+  assert.equal(normalize('Widget™ and Thing®'), 'Widget trademark and Thing registered');
+
+  // The stage itself leaves them for the symbols stage rather than speaking them.
+  assert.equal(applyCollapse('©2026'), '©2026');
+
+  // And a real emoji still goes.
+  assert.equal(applyCollapse('nice \u{1f389}'), 'nice ');
+});
+
+test('the model can voice an ellipsis, so nothing here throws one away', () => {
+  // U+2026 is in the Kokoro vocabulary. Collapsing it to a period would swap a
+  // trailing-off pause for a full stop and lose what the author wrote, which
+  // is why it is deliberately untouched here.
+  assert.equal(normalize('Wait… what?'), 'Wait… what?');
+});

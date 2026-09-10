@@ -232,7 +232,7 @@
     "footnote_markers": "Remove superscript digits U+00B9, U+00B2, U+00B3 and U+2070-U+2079. Bracketed markers like [1] are deliberately NOT removed: they are indistinguishable from a citation the reader may want.",
     "dot_leaders": "A run of four or more periods, optionally separated by spaces, becomes a single space. Table-of-contents leaders, not punctuation. Runs of two or three are left to repeated_punctuation below.",
     "repeated_punctuation": "A run of two or more of the SAME terminator (. ! ?) becomes one. Applied after dot_leaders, so a leader run is already gone.",
-    "emoji": "'skip' removes emoji; 'read' leaves them for the engine. Extended pictographic characters only, so ordinary symbols handled by the symbols list above are untouched.",
+    "emoji": "'skip' removes emoji; 'read' leaves them for the engine. Extended pictographic characters, EXCEPT any character that appears in the symbols or currency lists above. That exception is not tidiness: U+00A9, U+00AE and U+2122 are all Extended_Pictographic, so a plain pictographic test deletes the copyright, registered and trademark signs and with them the words the symbols list exists to produce. The lists are the authority on what gets spoken.",
     "_order": "zero_width, soft_hyphens, smart_quotes_to_plain, nbsp_to_space, dashes_to_plain, em_dash_to_comma, footnote_markers, dot_leaders, repeated_punctuation, emoji. Both halves apply them in this order; two of them interact, so the order is part of the contract."
   }
 }
