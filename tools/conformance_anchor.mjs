@@ -151,6 +151,26 @@ const CASES = [
  * They agree on *where* the bookmark lands in every case; they disagree on what
  * to call it, which decides what the user is told about how much to trust it.
  */
+/**
+ * Read a repository file, for premises that rest on something written down
+ * rather than on the corpus.
+ *
+ * A wider signature than the segment harness's `holds(CASES)`, deliberately.
+ * The reasoning these entries rest on lives in the shared data and in the
+ * vocabulary document, not in the case list, and a predicate that cannot reach
+ * it would have to be written as prose again — which is the thing that expired.
+ */
+const read = (rel) => {
+  const text = readFileSync(join(root, rel), 'utf8');
+  return rel.endsWith('.json') ? JSON.parse(text) : text;
+};
+
+/** Whether the vocabulary still contains both of its incompatible definitions. */
+function bothDefinitionsStillPresent() {
+  const doc = read('docs/anchor-vocabulary.md');
+  return doc.includes('character for character') && doc.includes('word for word');
+}
+
 const KNOWN = new Map([
   // Not an anchor disagreement, and the diagnosis above it was right: these
   // were the two halves holding different TEXT for the same page, with the
@@ -173,7 +193,16 @@ const KNOWN = new Map([
   // half, whose segmenter splits on them. That makes it the same structural
   // difference as the layout group in conformance_segment.mjs rather than a
   // bug in either side.
-  ['ws: newline instead of space', { python: 'exact', js: 'fuzzy' }],
+  ['ws: newline instead of space', {
+    python: 'exact',
+    js: 'fuzzy',
+    premise: {
+      describe: 'the output contract says newlines are left alone, so a quote '
+        + 'differing by one differs in characters and cannot be an exact match',
+      holds: () => read('shared/normalization.json')._output_contract
+        .includes('Newlines are left alone'),
+    },
+  }],
 
   // These two are the real question, and the vocabulary answers it twice.
   // The summary table calls exact "character for character"; the section below
@@ -183,8 +212,29 @@ const KNOWN = new Map([
   //
   // docs/anchor-vocabulary.md says neither half changes the contract alone, so
   // this goes to the user rather than to whichever of us edits first.
-  ['case: sentence recapitalised', { python: 'exact', js: 'fuzzy' }],
-  ['case: one word recapitalised', { python: 'exact', js: 'fuzzy' }],
+  //
+  // The premise is the contradiction itself, not either reading of it. The day
+  // the user resolves it, one of these phrases leaves the document and this
+  // fails — which is the point, because that is exactly the day these two
+  // entries stop being a shared open question and become one half's bug.
+  ['case: sentence recapitalised', {
+    python: 'exact',
+    js: 'fuzzy',
+    premise: {
+      describe: 'anchor-vocabulary.md still defines exact twice and differently'
+        + ' — "character for character" in the table, "word for word" in the'
+        + ' section below it — so neither half is deviating from a clear rule',
+      holds: bothDefinitionsStillPresent,
+    },
+  }],
+  ['case: one word recapitalised', {
+    python: 'exact',
+    js: 'fuzzy',
+    premise: {
+      describe: 'as above: the vocabulary still answers this twice',
+      holds: bothDefinitionsStillPresent,
+    },
+  }],
 ]);
 
 const py = process.env.EXECUTIVE_READER_PYTHON
@@ -233,6 +283,32 @@ CASES.forEach((c, i) => {
 
 const stale = [...KNOWN.keys()].filter((name) => !matchedKnown.has(name));
 
+/**
+ * Entries still diverging, but no longer for the reason recorded.
+ *
+ * The mechanism is the desktop half's, from conformance_segment.mjs, and it
+ * exists because a recorded divergence carries two claims and only one of them
+ * was ever checked: what the two halves do, and why that is acceptable. The
+ * staleness check above covers the first. An entry whose behaviour is unchanged
+ * while its argument has quietly expired passes everything.
+ *
+ * All three entries here rest on something written down elsewhere — the output
+ * contract, and the vocabulary document's two incompatible definitions of
+ * `exact`. Those are exactly the sentences that get edited by someone resolving
+ * the question, in a file that has nothing to do with this one.
+ */
+const brokenPremise = [];
+for (const [name, entry] of KNOWN) {
+  if (!entry.premise) continue;
+  let holds = false;
+  try {
+    holds = entry.premise.holds(CASES);
+  } catch {
+    holds = false; // a premise that cannot even be evaluated has not survived
+  }
+  if (!holds) brokenPremise.push(`  ${name}\n    stated reason: ${entry.premise.describe}`);
+}
+
 console.log(`${CASES.length} cases`);
 console.log(`  identical:        ${identical}`);
 console.log(`  known divergence: ${matchedKnown.size}`);
@@ -252,7 +328,15 @@ if (stale.length) {
     + ' code no longer has is worse than no list.');
 }
 
-if (unexpected.length || stale.length) process.exit(1);
+if (brokenPremise.length) {
+  console.error('\nStill diverging, but no longer for the reason recorded:\n');
+  console.error(brokenPremise.join('\n'));
+  console.error('\nThe behaviour is unchanged; the argument for tolerating it is'
+    + ' not. Decide again on the facts as they are now, then rewrite or remove'
+    + ' the entry. Do not just update the predicate to whatever passes.');
+}
+
+if (unexpected.length || stale.length || brokenPremise.length) process.exit(1);
 
 if (matchedKnown.size) {
   console.log('\nOK, with ' + matchedKnown.size + ' recorded divergences.'

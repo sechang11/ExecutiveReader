@@ -614,6 +614,35 @@ an entry whose behaviour changed; nothing catches an entry whose reasoning
 changed.** The only thing that caught this one was the other half re-reading the
 sentence while landing an unrelated rule.
 
+### A partial fix, from the desktop half
+
+An entry may now carry a `premise` beside its recorded shapes: the claim its
+tolerability rests on, written as a predicate instead of as prose. Three
+outcomes replace two — behaviour changed, *reason expired*, or both still hold —
+and the middle one fails the build with a message saying the argument has gone
+rather than the behaviour.
+
+All four entries carrying one here rest on a sentence in a *different file*,
+which is the distance that let the last expired reason survive:
+
+| entry | premise |
+|---|---|
+| newline is not an exact match | the output contract still says newlines are left alone |
+| the two capitalisation entries | the vocabulary still defines `exact` twice, and differently |
+| the layout group | `pdf/viewer.js` still splits paragraphs on blank lines |
+
+Each was verified by breaking the premise while leaving both halves' behaviour
+untouched, and watching it fail: resolving the vocabulary contradiction on
+paper, editing the contract, and making the viewer hand a whole page to the
+segmenter.
+
+Its limits, because overstating them would be the same error again. It catches
+only reasoning that was *expressible* — "this shape never occurs in production"
+is; "neither behaviour is obviously wrong" is not. And the lazy repair is to
+edit the predicate until it passes, which is why the failure message says not
+to. **It converts a class of silent expiry into a loud one. It does not convert
+judgement into arithmetic.**
+
 The rule is now implemented rather than recorded: `terminators` in
 `shared/abbreviations.json`. It is deliberately not generalised to the plain
 period, which is the wider rule the desktop half applies. The argument looks

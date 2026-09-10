@@ -121,6 +121,21 @@ const KNOWN = new Map([
   ['two lines, no terminator', {
     python: ['Line one.', 'Line two'],
     js: ['Line one\nLine two'],
+    // The premise for this whole group, attached to its first member. The
+    // divergence is tolerable only because nothing reaches the extension's
+    // segmenter with a newline in it, and the load-bearing half of that is the
+    // PDF viewer: it splits linesToText output on blank lines and renders one
+    // paragraph element per break. Change it to hand a whole page to the
+    // segmenter and this group stops being structural and becomes a defect —
+    // decided in a file with nothing to do with this one, which is exactly the
+    // distance that let the last expired reason survive.
+    premise: {
+      describe: 'extension/src/pdf/viewer.js still splits paragraphs on blank '
+        + 'lines, so the segmenter never receives a newline from the PDF path',
+      holds: () => readFileSync(
+        join(root, 'extension', 'src', 'pdf', 'viewer.js'), 'utf8',
+      ).includes('split(/\\n{2,}/)'),
+    },
   }],
   ['heading then body', {
     python: ['A Heading', 'Some body text follows.'],
@@ -157,6 +172,19 @@ const KNOWN = new Map([
   ['numbered list', {
     python: ['1. Preheat the oven.', '2. Butter the tin.', '3. Bake it.'],
     js: ['1. Preheat the oven.', '2.', 'Butter the tin.', '3.', 'Bake it.'],
+    // The whole tolerance rests on this input being a shape neither half is
+    // handed in production. Written as a predicate rather than as prose,
+    // because prose cannot be checked: rewrite the case one line at a time,
+    // the way both halves really receive it, and the divergence should vanish
+    // rather than be excused by a comment that no longer applies.
+    premise: {
+      describe: 'the case feeds all three items as one multi-line string, '
+        + 'which neither half receives in production',
+      holds: (cases) => {
+        const found = cases.find(([name]) => name === 'numbered list');
+        return Boolean(found) && found[1].includes('\n');
+      },
+    },
   }],
 
   ['markdown table', {
@@ -226,6 +254,38 @@ CASES.forEach(([name, text], i) => {
 
 const stale = [...KNOWN.keys()].filter((name) => !matchedKnown.has(name));
 
+/**
+ * Entries whose stated reason no longer holds, even though the behaviour does.
+ *
+ * The staleness check above catches an entry whose *behaviour* changed. Nothing
+ * caught one whose *reasoning* changed, and that happened here: an entry said
+ * "outside a collapsed ellipsis the case is rare, which is why it is recorded
+ * rather than chased". True the day it was written. A rule in a different file
+ * then turned every authored "..." into an ellipsis, which moved the case from
+ * rare to every document, and the entry went on being correct about the
+ * behaviour while being wrong about why that was acceptable. It was caught by
+ * someone re-reading the sentence while landing something else, which is not a
+ * procedure.
+ *
+ * So an entry may carry a `premise`: the claim its acceptability rests on,
+ * written as a predicate over the corpus rather than as prose. Prose cannot be
+ * checked; a predicate can. An entry without one is not wrong, it just has
+ * nothing here to check.
+ */
+const brokenPremise = [];
+for (const [name, entry] of KNOWN) {
+  if (!entry.premise) continue;
+  let holds = false;
+  try {
+    holds = entry.premise.holds(CASES);
+  } catch (err) {
+    holds = false;
+  }
+  if (!holds) {
+    brokenPremise.push(`  ${name}\n    stated reason: ${entry.premise.describe}`);
+  }
+}
+
 console.log(`${CASES.length} cases`);
 console.log(`  identical:        ${identical}`);
 console.log(`  known divergence: ${matchedKnown.size}`);
@@ -242,7 +302,14 @@ if (stale.length) {
   for (const name of stale) console.error(`  ${name}`);
   console.error('\nDelete them from KNOWN.');
 }
-if (unexpected.length || stale.length) process.exit(1);
+if (brokenPremise.length) {
+  console.error('\nStill diverging, but no longer for the reason recorded:\n');
+  console.error(brokenPremise.join('\n'));
+  console.error('\nThe behaviour is unchanged; the argument for tolerating it is'
+    + ' not. Decide again on the facts as they are now, then rewrite or remove'
+    + ' the entry. Do not just update the predicate to whatever passes.');
+}
+if (unexpected.length || stale.length || brokenPremise.length) process.exit(1);
 
 if (matchedKnown.size) {
   console.log('\nOK, with ' + matchedKnown.size
