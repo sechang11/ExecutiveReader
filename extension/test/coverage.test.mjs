@@ -178,6 +178,12 @@ function exercised(module) {
 const KNOWN_UNEXERCISED = {
   'src/content/extract.js': ['findArticleRoot', 'extractBlocks', 'extractBySite', 'rangeFor'],
   'src/content/pagination.js': ['findNext', 'watchForGrowth'],
+  // Not a gap: three tests delete bodies, through remove(), clear() and
+  // prune(), and assert the body is gone afterwards. The scan looks for the
+  // export's name in a test file and no test names this one, because callers
+  // reach it through the operations a user actually performs. Testing it by
+  // name would be testing it twice, so the entry stays and the reason is
+  // written down rather than the coverage being overstated.
   'src/core/history.js': ['deleteBodies'],
   'src/engines/kokoro/g2p-en.js': ['init'],
 };
