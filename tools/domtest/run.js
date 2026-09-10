@@ -220,6 +220,39 @@ await test(
   },
 );
 
+await test(
+  'no newline ever reaches the segmenter from the DOM',
+  // The desktop half treats a line break as structure and the extension does
+  // not, which its conformance harness records as the largest group of
+  // divergences. It is unreachable here: extractBlocks collapses every run of
+  // whitespace inside a block, and separate rendered blocks are separate
+  // blocks, so segment() is never handed a newline to misread. This asserts
+  // that rather than arguing it, because the argument is what would rot.
+  `<div>
+     <p>The sentence was wrapped by the exporter
+across two lines even though it
+is one sentence.</p>
+     <h2>A Heading</h2>
+     <p>Some body text follows.</p>
+     <pre>const a = 1;
+const b = 2;</pre>
+   </div>`,
+  (root) => {
+    const blocks = extractBlocks(root);
+    assert(blocks.length >= 3, `only ${blocks.length} blocks`);
+    for (const b of blocks) {
+      assert(!/[\r\n]/.test(b.text), `a block carried a line break: ${JSON.stringify(b.text)}`);
+    }
+    // And the hard-wrapped paragraph is one block, rejoined with spaces.
+    equal(blocks[0].text,
+      'The sentence was wrapped by the exporter across two lines even though it is one sentence.');
+    // The heading and the paragraph under it are separate, which is the case
+    // the desktop half reaches by breaking on the blank line.
+    equal(blocks[1].text, 'A Heading');
+    equal(blocks[2].text, 'Some body text follows.');
+  },
+);
+
 // ---------------------------------------------------------------- ranges
 
 await test(

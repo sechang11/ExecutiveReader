@@ -27,17 +27,50 @@ let scroller = null;
 /** Sentence currently painted, so word offsets resolve against the right span. */
 let activeIndex = -1;
 
-/** Shared rule data. Both loads are best-effort: without them the reader still
- *  works, it just splits and speaks a little less well. */
+/**
+ * Shared rule data, loaded from inside the package.
+ *
+ * These four fetches read files that ship with the extension, so a failure is
+ * not a network condition — it means the package is incomplete. The earlier
+ * version swallowed that with `.catch(() => {})` and a comment saying the
+ * reader "splits and speaks a little less well" without them. That understated
+ * it in a way worth spelling out: with no abbreviations, `Dr. Smith arrived.`
+ * becomes two sentences, so every sentence boundary on the page moves, and the
+ * quotes stored against those boundaries no longer match the ones the same page
+ * produces when the file does load. Reading positions silently stop resolving.
+ *
+ * So: still best-effort, because reading badly beats not reading at all, but
+ * the failure is reported rather than hidden.
+ *
+ * Each path is written out in full rather than assembled from a name, because
+ * a test checks that every file in `src/shared/` is actually loaded by
+ * searching this source for it. A template literal is invisible to that scan,
+ * and a guard that cannot see the thing it guards passes for the wrong reason.
+ *
+ * @param {string} path @param {(data: any) => void} apply
+ */
+function loadShared(path, apply) {
+  return fetch(chrome.runtime.getURL(path))
+    .then((r) => {
+      if (!r.ok) throw new Error(String(r.status));
+      return r.json();
+    })
+    .then(apply)
+    .catch((err) => {
+      console.error(
+        `[executive-reader] ${path} did not load (${err.message}). This file `
+        + 'ships inside the extension, so this means the package is incomplete. '
+        + 'Text will be split and spoken by the built-in defaults, which do not '
+        + 'match the ones stored reading positions were saved against.',
+      );
+    });
+}
+
 const rulesReady = Promise.all([
-  fetch(chrome.runtime.getURL('src/shared/abbreviations.json'))
-    .then((r) => r.json()).then(loadAbbreviations).catch(() => {}),
-  fetch(chrome.runtime.getURL('src/shared/normalization.json'))
-    .then((r) => r.json()).then(loadNormalization).catch(() => {}),
-  fetch(chrome.runtime.getURL('src/shared/pagination.json'))
-    .then((r) => r.json()).then(loadRules).catch(() => {}),
-  fetch(chrome.runtime.getURL('src/shared/sites.json'))
-    .then((r) => r.json()).then(loadSites).catch(() => {}),
+  loadShared('src/shared/abbreviations.json', loadAbbreviations),
+  loadShared('src/shared/normalization.json', loadNormalization),
+  loadShared('src/shared/pagination.json', loadRules),
+  loadShared('src/shared/sites.json', loadSites),
 ]);
 
 /**

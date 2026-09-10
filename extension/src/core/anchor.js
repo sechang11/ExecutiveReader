@@ -19,6 +19,8 @@
  * So the fingerprint governs *confidence*, never control flow. See spec 7.1.
  */
 
+import { tidy } from './normalize.js';
+
 /** How many neighbouring sentences to keep either side, for disambiguation. */
 const CONTEXT = 2;
 
@@ -36,8 +38,19 @@ const CONTEXT = 2;
  * maximum is the obvious implementation and it is quietly wrong on duplicated
  * sentences.
  */
+
 const ACCEPT = 0.5;
 const TIE_MARGIN = 0.05;
+
+/**
+ * A sentence in the form the normalization contract says both halves emit.
+ *
+ * Imported rather than reimplemented: `tidy` is the contract's own
+ * implementation, and a second copy here would be free to drift from the thing
+ * it claims to agree with. That is the failure this whole file exists to
+ * prevent, one level down.
+ */
+const contractual = (s) => tidy(s ?? '');
 
 /**
  * @typedef {{
@@ -221,10 +234,23 @@ export function locate(anchor, sentences, currentStamp = null) {
   // saved before stamping existed must not be reported as rewritten.
   const stampChanged = anchor.stamp != null && currentStamp != null && !stampsAgree;
 
+  // Compare on the form the normalization contract says both halves produce:
+  // runs of spaces and tabs collapsed, ends trimmed, newlines left alone. Two
+  // strings that differ only in that respect cannot both be legal output of the
+  // pipeline, so treating them as different was not strictness — it was
+  // treating a violated invariant as evidence about the page.
+  //
+  // What this deliberately does not do is fold case or drop punctuation.
+  // `exact` means character for character, and a sentence that was recapitalised
+  // or had its apostrophe restyled genuinely is not the same characters. Those
+  // belong to `fuzzy`, which is what it is for.
+  const quote = contractual(anchor.quote);
+  const current = sentences.map(contractual);
+
   // 1. Exact. Always attempted, whatever the stamp says.
   const exact = [];
-  for (let i = 0; i < sentences.length; i++) {
-    if (sentences[i] === anchor.quote) exact.push(i);
+  for (let i = 0; i < current.length; i++) {
+    if (current[i] === quote) exact.push(i);
   }
   if (exact.length === 1) {
     return { index: exact[0], how: 'exact', verified: stampsAgree, stampChanged };

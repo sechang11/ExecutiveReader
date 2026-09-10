@@ -297,3 +297,71 @@ test('genuinely equal candidates still defer to their neighbours', () => {
   const s = ['Intro.', 'Same line.', 'Middle.', 'Same line.', 'Tail.'];
   assert.equal(locate(capture(s, 3, STAMP), s, STAMP).index, 3);
 });
+
+/**
+ * Whitespace the normalization contract already forbids.
+ *
+ * `_output_contract` in shared/normalization.json requires both halves to
+ * collapse runs of spaces and tabs and trim the ends. Two strings differing only
+ * in that respect cannot both be legal output of the pipeline, so treating them
+ * as different sentences was not strictness — it reported a violated invariant
+ * as evidence that the page had changed, and told the reader their position was
+ * only "probably" right when it was certainly right.
+ *
+ * Found by the desktop half's anchor conformance harness, which resolves the
+ * same bookmark through both implementations. No test on either side covered it.
+ */
+test('a collapsed run of spaces is still an exact match', () => {
+  const saved = ['Intro.', 'The  cat  sat  down  quietly.', 'Tail.'];
+  const now = ['Intro.', 'The cat sat down quietly.', 'Tail.'];
+
+  const got = locate(capture(saved, 1, STAMP), now, STAMP);
+
+  assert.equal(got.how, 'exact');
+  assert.equal(got.index, 1);
+  assert.equal(got.verified, true, 'an exact match with a matching stamp is verified');
+});
+
+test('a tab where a space was is still an exact match', () => {
+  const saved = ['Intro.', 'The cat\tsat down quietly.', 'Tail.'];
+  const now = ['Intro.', 'The cat sat down quietly.', 'Tail.'];
+  assert.equal(locate(capture(saved, 1, STAMP), now, STAMP).how, 'exact');
+});
+
+test('leading and trailing whitespace is still an exact match', () => {
+  const saved = ['Intro.', '   The cat sat down quietly.  ', 'Tail.'];
+  const now = ['Intro.', 'The cat sat down quietly.', 'Tail.'];
+  assert.equal(locate(capture(saved, 1, STAMP), now, STAMP).how, 'exact');
+});
+
+/**
+ * The line the contract draws, and this file will not cross alone.
+ *
+ * `docs/anchor-vocabulary.md` defines `exact` as character for character, and
+ * the normalization contract says in as many words that newlines are left
+ * alone. A recapitalised sentence or a restyled apostrophe genuinely is not the
+ * same characters, so it belongs to `fuzzy`. The desktop half currently reports
+ * these as `exact`; that disagreement is recorded in tools/conformance_anchor.mjs
+ * rather than settled by whichever side edited first.
+ */
+test('a recapitalised sentence is not an exact match', () => {
+  const saved = ['Intro.', 'The cat sat down quietly.', 'Tail.'];
+  const now = ['Intro.', 'THE CAT SAT DOWN QUIETLY.', 'Tail.'];
+
+  const got = locate(capture(saved, 1, STAMP), now, STAMP);
+
+  assert.notEqual(got.how, 'exact', 'case folding is not in the vocabulary');
+  assert.equal(got.index, 1, 'and it still finds the right sentence');
+});
+
+test('a newline where a space was is not an exact match', () => {
+  // The contract preserves newlines deliberately: on the PDF path a line break
+  // carries layout meaning that a space does not.
+  const saved = ['Intro.', 'The cat\nsat down quietly.', 'Tail.'];
+  const now = ['Intro.', 'The cat sat down quietly.', 'Tail.'];
+
+  const got = locate(capture(saved, 1, STAMP), now, STAMP);
+
+  assert.notEqual(got.how, 'exact');
+  assert.equal(got.index, 1);
+});

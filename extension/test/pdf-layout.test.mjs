@@ -129,3 +129,54 @@ test('handles empty and whitespace-only input', () => {
   assert.equal(linesToText([]), '');
   assert.deepEqual(findColumns([], 600), [[]]);
 });
+
+/**
+ * The invariant the segmenter relies on, checked at the boundary that produces
+ * it.
+ *
+ * The desktop half segments on line breaks and this half does not, which its
+ * conformance harness records as its largest group of divergences, with the
+ * reasoning that a PDF is where hard wrapping is universal. It is not reachable
+ * here, and the reason is two steps upstream rather than in the segmenter.
+ *
+ * `linesToText` rejoins wrapped lines with spaces and emits a blank line only
+ * at a paragraph break, using the *geometry* — the gap between baselines — which
+ * is the only place that decision can be made correctly. The viewer then splits
+ * on those blank lines and renders one `<p>` per paragraph, so what reaches the
+ * segmenter is DOM blocks with no line breaks in them at all.
+ *
+ * This pins the first step. The second is pinned in tools/domtest/.
+ */
+test('rejoined paragraphs carry no line breaks into the page', () => {
+  // Two paragraphs of hard-wrapped prose: three tight lines, a wide gap, two
+  // more tight lines.
+  const lines = [
+    { y: 300, x: 0, right: 100, text: 'The sentence was wrapped by the' },
+    { y: 288, x: 0, right: 100, text: 'exporter across three lines even' },
+    { y: 276, x: 0, right: 100, text: 'though it is one sentence.' },
+    { y: 240, x: 0, right: 100, text: 'A second paragraph begins here' },
+    { y: 228, x: 0, right: 100, text: 'and also wraps.' },
+  ];
+
+  const text = linesToText(lines);
+
+  // The viewer's own rule, mirrored: src/pdf/viewer.js splits on /\n{2,}/.
+  const paragraphs = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+
+  assert.equal(paragraphs.length, 2, 'the paragraph break was not detected');
+  assert.equal(paragraphs[0],
+    'The sentence was wrapped by the exporter across three lines even though it is one sentence.');
+  for (const p of paragraphs) {
+    assert.ok(!/[\r\n]/.test(p), `a paragraph kept a line break: ${JSON.stringify(p)}`);
+  }
+});
+
+test('a paragraph break is the only thing that survives as a blank line', () => {
+  // Guards the guard above: if linesToText emitted no break at all, the split
+  // would trivially produce newline-free paragraphs and prove nothing.
+  const tight = [
+    { y: 300, x: 0, right: 100, text: 'One line.' },
+    { y: 288, x: 0, right: 100, text: 'Another line.' },
+  ];
+  assert.ok(!/\n/.test(linesToText(tight)), 'evenly spaced lines are one paragraph');
+});

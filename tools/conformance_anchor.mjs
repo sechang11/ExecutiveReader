@@ -108,18 +108,33 @@ const CASES = [
  * stops happening also fails, because a fixed divergence must be deleted from
  * this list rather than left to describe something that is no longer true.
  *
- * All of these share one cause: the desktop half compares sentences with
- * whitespace collapsed, case folded and punctuation stripped, and the
- * extension compares the raw strings. They agree on *where* the bookmark
- * lands in every case below; they disagree on what to call it, which decides
- * what the user is told about how much to trust the position. Neither side's
- * tests cover it, so this is an oversight on both rather than a decision on
- * either.
+ * These began as eight, all attributed to the extension comparing raw strings
+ * where the desktop compares with whitespace collapsed, case folded and
+ * punctuation stripped. Three of the eight were the extension's to fix and are
+ * gone: `_output_contract` in shared/normalization.json already requires both
+ * halves to collapse runs of spaces and tabs and trim the ends, so two strings
+ * differing only in that respect cannot both be legal pipeline output. The
+ * extension now compares on that form, using the contract's own `tidy`.
+ *
+ * The five below are not the same kind of thing, and the difference is worth
+ * stating rather than folding into one cause. `docs/anchor-vocabulary.md`
+ * defines `exact` as "character for character", and the same contract says in
+ * as many words that **newlines are left alone**. A non-breaking space is not a
+ * space or a tab and is likewise untouched. So a quote that differs from the
+ * live sentence by a newline, a non-breaking space, a capital letter or an
+ * apostrophe style differs in characters, and `exact` is not available for it
+ * under the vocabulary as written.
+ *
+ * That makes these five the desktop half's deviation from the shared contract
+ * rather than the extension's oversight — or, if the contract is wrong, a
+ * change to `docs/anchor-vocabulary.md` that neither half makes alone. The
+ * document says so itself. Left listed, unresolved, and deliberately not
+ * silently conformed to in either direction.
+ *
+ * They agree on *where* the bookmark lands in every case; they disagree on what
+ * to call it, which decides what the user is told about how much to trust it.
  */
 const KNOWN = new Map([
-  ['ws: internal run collapsed', { python: 'exact', js: 'fuzzy' }],
-  ['ws: leading and trailing', { python: 'exact', js: 'fuzzy' }],
-  ['ws: tab instead of space', { python: 'exact', js: 'fuzzy' }],
   ['ws: newline instead of space', { python: 'exact', js: 'fuzzy' }],
   ['ws: non-breaking space', { python: 'exact', js: 'fuzzy' }],
   ['case: sentence recapitalised', { python: 'exact', js: 'fuzzy' }],

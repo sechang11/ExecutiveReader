@@ -381,3 +381,49 @@ testable against a document and nothing had ever run one against it.
 **A precondition that applies to every branch belongs above the loop.** It is
 now one predicate used by all three, which is also the shape that makes the next
 strategy inherit it for free.
+
+## 24. Enforcing a contract is not loosening a comparison
+
+The anchor ladder compared stored quotes to live sentences as raw strings, so a
+sentence that gained a double space resolved as `fuzzy` — "probably the right
+place" — when it was certainly the right place. The desktop half reported
+`exact`. Its conformance harness found eight such disagreements; no test on
+either side covered any of them.
+
+The reflex is to treat this as a choice between strict and lenient. It is not.
+`_output_contract` in `shared/normalization.json` already requires both halves
+to collapse runs of spaces and tabs and trim the ends, so two strings differing
+only in that respect **cannot both be legal output of the pipeline**. Comparing
+them as different was reporting a violated invariant as evidence about the page.
+Three of the eight were that, and they are gone.
+
+The other five are the opposite finding. `docs/anchor-vocabulary.md` defines
+`exact` as character for character, and the same contract says newlines are left
+alone; a non-breaking space is neither a space nor a tab. So a quote differing
+by a newline, a non-breaking space, a capital letter or an apostrophe style
+differs in characters, and `exact` is not available for it. Those five are the
+desktop half's deviation, or a change to the vocabulary that neither half makes
+alone — and the vocabulary document says so itself.
+
+**Before conforming to the other implementation, check what the contract
+actually says.** Two halves agreeing on something neither is allowed to do is
+the same failure as two halves disagreeing, minus the symptom.
+
+## 25. An argument about reachability rots; a test does not
+
+The desktop half also reported that this half's segmenter treats a newline as an
+ordinary character, and warned it would not survive PDFs, where hard wrapping is
+universal. The behaviour is real. The consequence is not: `extractBlocks`
+collapses every whitespace run inside a block, and the PDF viewer splits
+`linesToText` output on blank lines and renders one `<p>` per paragraph, so the
+segmenter is never handed a newline from either path.
+
+Note where the work happens. Rejoining a wrapped line is a decision about the
+gap between two baselines, and only the PDF geometry code knows that. A newline
+heuristic in the segmenter would be guessing at what was already measured.
+
+The reply to that report could have been this paragraph. Instead it is two tests
+— one in `tools/domtest/` asserting no block text carries a line break, one in
+`pdf-layout.test.mjs` asserting no rejoined paragraph does. Prose explaining why
+a defect cannot be reached is exactly the kind of true-sounding claim section 19
+is about, and it stops being true the day someone adds a third input path.
