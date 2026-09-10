@@ -169,6 +169,7 @@ const SITE_FILES = [
   ['extension/src/core/normalize.js', 'site/vendor/normalize.js'],
   ['shared/abbreviations.json', 'site/assets/abbreviations.json'],
   ['shared/normalization.json', 'site/assets/normalization.json'],
+  ['extension/assets/icon-128.png', 'site/assets/icon-128.png'],
 ];
 
 for (const { from, to: toDir } of DIRS) {

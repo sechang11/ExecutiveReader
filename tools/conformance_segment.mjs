@@ -93,7 +93,58 @@ const CASES = [
  * does a recorded one that stops happening, because a list describing behaviour
  * the code no longer has is worse than no list.
  */
-const KNOWN = new Map([]);
+const KNOWN = new Map([
+  // --- layout ---------------------------------------------------------------
+  // The desktop half treats a line break as structure: it breaks on blank
+  // lines, rejoins prose the exporter hard-wrapped, and strips list bullets.
+  // The extension treats a newline as an ordinary character, so a heading and
+  // the paragraph under it arrive as one segment with the break inside it.
+  //
+  // The desktop behaviour is the one that reads well aloud, and the extension
+  // gets away without it because the DOM already separates the elements it
+  // reads. It does not get away with it on a PDF, which is why it vendors
+  // pdf.js. This is the largest group here and the one worth resolving first.
+  ['two lines, no terminator', {
+    python: ['Line one.', 'Line two'],
+    js: ['Line one\nLine two'],
+  }],
+  ['heading then body', {
+    python: ['A Heading', 'Some body text follows.'],
+    js: ['A Heading\n\nSome body text follows.'],
+  }],
+  ['hard-wrapped prose', {
+    python: ['The sentence was wrapped by the exporter across two lines even though it is one sentence.'],
+    js: ['The sentence was wrapped by the exporter\nacross two lines even though it\nis one sentence.'],
+  }],
+  ['bulleted list', {
+    python: ['First item.', 'Second item.'],
+    js: ['- First item.', '- Second item.'],
+  }],
+  ['markdown table', {
+    python: ['| Path | Size |', '| vendor/pdfjs | 1.7 MB |', 'After the table.'],
+    js: ['| Path | Size |\n|---|---|\n| vendor/pdfjs | 1.7 MB |\n\nAfter the table.'],
+  }],
+
+  // --- normalising, not splitting -------------------------------------------
+  // These two are decided before the segmenter sees the text, and neither
+  // stage is covered by conformance.mjs, which stops at symbols, currency and
+  // expansions. The desktop half collapses a run of periods and reads a link
+  // as its domain; the extension does neither.
+  ['ellipsis mid sentence', {
+    python: ['Wait. what happened?'],
+    js: ['Wait...', 'what happened?'],
+  }],
+  ['url with dots', {
+    python: ['Visit link to example.com for more.', 'Then leave.'],
+    js: ['Visit https://example.com/a.b for more.', 'Then leave.'],
+  }],
+
+  // --- degenerate -----------------------------------------------------------
+  // Punctuation with no words in it. The desktop drops it, the extension keeps
+  // it and would speak it. Harmless either way, listed so it is not mistaken
+  // for a new problem later.
+  ['terminator only', { python: [], js: ['...'] }],
+]);
 
 const py = process.env.EXECUTIVE_READER_PYTHON
   || join(root, 'desktop', '.venv', 'Scripts', 'python.exe');

@@ -5,6 +5,9 @@
  * declared icons are missing, and a designed icon is a launch task, not a
  * phase-one task. Replace assets/*.png whenever the real artwork exists.
  *
+ * The geometry is supersampled rather than tested once per pixel. At 16 pixels
+ * the difference is not subtle — that is the size the toolbar actually shows.
+ *
  * Run: node tools/make-icons.mjs
  */
 
@@ -22,38 +25,84 @@ const FG = [255, 255, 255];
 const BARS = [[0.32, 0.14], [0.5, 0.26], [0.68, 0.18]];
 const BAR_W = 0.085;
 const RADIUS = 0.22; // rounded-square corner, as a fraction of the side
+const CAP = 0.5;     // bar end rounding, as a fraction of the bar's half-width
+
+/**
+ * Samples per axis when rendering.
+ *
+ * Everything below is a hard in-or-out test, which at 16 pixels produces bars
+ * with visibly ragged ends and a corner that stair-steps. Rendering the same
+ * geometry at four times the resolution and averaging is the whole of the fix:
+ * a pixel straddling an edge gets the fraction of it that is actually covered.
+ */
+const SS = 4;
+
+/** Whether a point, in fractions of the canvas, is inside the rounded square. */
+function inTile(fx, fy) {
+  const cx = Math.min(fx, 1 - fx);
+  const cy = Math.min(fy, 1 - fy);
+  if (cx >= RADIUS || cy >= RADIUS) return true;
+  return (RADIUS - cx) ** 2 + (RADIUS - cy) ** 2 <= RADIUS * RADIUS;
+}
+
+/**
+ * Whether a point is inside one of the bars.
+ *
+ * The bars are stadiums rather than rectangles: square ends read as a bar
+ * chart, and rounded ones as a level meter, which is what this is meant to be.
+ */
+function inBar(fx, fy) {
+  for (const [bx, bh] of BARS) {
+    const halfW = BAR_W / 2;
+    if (Math.abs(fx - bx) > halfW) continue;
+    if (Math.abs(fy - 0.5) > bh) continue;
+
+    const capR = halfW * CAP * 2;
+    const flat = bh - capR;
+    const dy = Math.abs(fy - 0.5);
+    if (dy <= flat) return true;
+
+    // Inside a cap: distance to the centre of the end circle.
+    const dx = Math.abs(fx - bx);
+    if (dx <= halfW - capR) return true;
+    const ox = dx - (halfW - capR);
+    const oy = dy - flat;
+    if (ox * ox + oy * oy <= capR * capR) return true;
+  }
+  return false;
+}
 
 /** @returns {Buffer} raw RGBA pixels, row-major */
 function render(size) {
   const px = Buffer.alloc(size * size * 4);
-  const r = RADIUS * size;
+  const per = SS * SS;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
+      let tile = 0;
+      let bar = 0;
+
+      for (let sy = 0; sy < SS; sy++) {
+        for (let sx = 0; sx < SS; sx++) {
+          const fx = (x + (sx + 0.5) / SS) / size;
+          const fy = (y + (sy + 0.5) / SS) / size;
+          if (!inTile(fx, fy)) continue;
+          tile++;
+          if (inBar(fx, fy)) bar++;
+        }
+      }
+
+      if (!tile) continue; // fully outside: leave transparent
+
+      // Coverage decides alpha; the bar's share of the covered part decides
+      // colour. Doing it in that order keeps a bar end that lands on the tile
+      // edge from picking up a fringe of background.
+      const t = bar / tile;
       const i = (y * size + x) * 4;
-
-      // Rounded-square mask, with the corner test only near the corners.
-      const cx = Math.min(x, size - 1 - x);
-      const cy = Math.min(y, size - 1 - y);
-      let inside = true;
-      if (cx < r && cy < r) {
-        inside = (r - cx) ** 2 + (r - cy) ** 2 <= r * r;
-      }
-      if (!inside) continue; // leave fully transparent
-
-      let colour = BG;
-      for (const [bx, bh] of BARS) {
-        const left = (bx - BAR_W / 2) * size;
-        const right = (bx + BAR_W / 2) * size;
-        const top = (0.5 - bh) * size;
-        const bottom = (0.5 + bh) * size;
-        if (x >= left && x <= right && y >= top && y <= bottom) { colour = FG; break; }
-      }
-
-      px[i] = colour[0];
-      px[i + 1] = colour[1];
-      px[i + 2] = colour[2];
-      px[i + 3] = 255;
+      px[i] = Math.round(BG[0] + (FG[0] - BG[0]) * t);
+      px[i + 1] = Math.round(BG[1] + (FG[1] - BG[1]) * t);
+      px[i + 2] = Math.round(BG[2] + (FG[2] - BG[2]) * t);
+      px[i + 3] = Math.round((tile / per) * 255);
     }
   }
   return px;

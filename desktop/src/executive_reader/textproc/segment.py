@@ -23,6 +23,14 @@ _ABBREV_FALLBACK = {
 }
 _ABBREV = shared_rules.abbreviations(_ABBREV_FALLBACK)
 
+#: A lone letter before the period is an initial, not a sentence end.
+#: "J. R. R. Tolkien wrote it." is one sentence, and used to be three. The rule
+#: has to outrank the looks-like-a-new-sentence rescue further down, because the
+#: next initial is capitalised too and would otherwise read as a fresh sentence
+#: every time. The extension already had this; the two halves disagreed on every
+#: name written with initials.
+_INITIAL = re.compile(r"(?:^|\s)[A-Za-z]$")
+
 _SENT_END = re.compile(r"([.!?\u2026]+)([\"'\u201d\u2019\)\]]*)(\s+)")
 _WORD_TAIL = re.compile(r"([A-Za-z][A-Za-z.]*)$")
 _CLAUSE_SPLIT = re.compile(r"(?<=[,;:\u2014])\s+")
@@ -45,6 +53,8 @@ def _split_sentences(text: str) -> list[str]:
         # "3.14" or "Dr." should not terminate a sentence.
         if head and head[-1].isdigit() and m.group(1) == "." and end < len(text) \
                 and text[end:end + 2].strip()[:1].isdigit():
+            continue
+        if _INITIAL.search(head):
             continue
         if _ends_abbrev(head):
             continue

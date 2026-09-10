@@ -38,3 +38,11 @@ jobs:
         run: |
           node tools/sync-shared.mjs
           git diff --exit-code
+
+      # The store listing points at the published privacy policy while the
+      # extension ships the markdown. Generating the page is what stops the two
+      # from disagreeing; this is what stops the generation from lapsing.
+      - name: Privacy policy is generated, not drifted
+        run: |
+          node tools/build-privacy.mjs
+          git diff --exit-code

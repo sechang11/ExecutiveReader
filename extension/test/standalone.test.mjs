@@ -121,6 +121,7 @@ test('the site demo runs the same code and data as the extension', () => {
     ['src/core/normalize.js', '../site/vendor/normalize.js'],
     ['../shared/abbreviations.json', '../site/assets/abbreviations.json'],
     ['../shared/normalization.json', '../site/assets/normalization.json'],
+    ['assets/icon-128.png', '../site/assets/icon-128.png'],
   ];
   let compared = 0;
   for (const [canonical, copy] of pairs) {

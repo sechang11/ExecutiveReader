@@ -88,8 +88,32 @@ def test_both_halves_resolve_a_bookmark_the_same_way():
     Known divergences are enumerated in the harness itself. This asserts only
     that none is unrecorded and that every case was actually compared.
     """
+    return _check_divergence_harness("conformance_anchor.mjs")
+
+
+def test_both_halves_split_the_same_text_into_the_same_sentences():
+    """The claim both READMEs make, which nothing checked.
+
+    conformance.mjs compares the normalising stages and stops there. It never
+    calls segment(), although shared/abbreviations.json exists for nothing else
+    and both halves describe identical sentence splitting as a guarantee.
+
+    That is the shape CAVEATS entry 16 warns about: a true structural fact,
+    `shared/` really is shared and a harness really does exist, carrying an
+    unearned conclusion. The first run found nine disagreements.
+    """
+    return _check_divergence_harness("conformance_segment.mjs")
+
+
+def _check_divergence_harness(name: str):
+    """Run a harness that reports identical / known divergence / unexpected.
+
+    Asserts only that no disagreement is unrecorded and that every case landed
+    in a bucket. The harness itself owns which divergences are known, and fails
+    on its own if one of them stops happening.
+    """
     node = shutil.which("node")
-    script = _harness("conformance_anchor.mjs")
+    script = _harness(name)
     if node is None or script is None:
         print("   (no Node or no harness; skipping)")
         return SKIPPED
@@ -99,7 +123,7 @@ def test_both_halves_resolve_a_bookmark_the_same_way():
         text=True, encoding="utf-8", errors="replace", timeout=300,
     )
     output = (result.stdout or "") + (result.stderr or "")
-    assert result.returncode == 0, "anchor harness failed:" + chr(10) + output
+    assert result.returncode == 0, name + " failed:" + chr(10) + output
 
     numbers = {}
     for line in output.splitlines():
@@ -128,6 +152,7 @@ def test_both_halves_resolve_a_bookmark_the_same_way():
     assert seen == cases, ("only " + str(seen) + " of " + str(cases)
                            + " cases were accounted for:" + chr(10) + output)
     assert cases > 0, "the harness compared nothing:" + chr(10) + output
+    return None
 
 
 if __name__ == "__main__":
