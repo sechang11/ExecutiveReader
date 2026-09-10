@@ -22,8 +22,8 @@ def _ancestor_containing(*relative: str) -> tuple[Path, Path] | tuple[None, None
                 return parent, candidate
     return None, None
 
-# The directory to put on sys.path so `import earmark` works.
-_pkg_parent, _pkg = _ancestor_containing("src/earmark", "desktop/src/earmark")
+# The directory to put on sys.path so `import executive_reader` works.
+_pkg_parent, _pkg = _ancestor_containing("src/executive_reader", "desktop/src/executive_reader")
 SOURCE_ROOT: Path | None = _pkg.parent if _pkg is not None else None
 
 # The repository root, identified by the rule data both halves share.
@@ -34,7 +34,7 @@ SHARED_DIR: Path | None = _shared.parent if _shared is not None else None
 def install() -> Path:
     """Put the package on sys.path and return where it was found."""
     if SOURCE_ROOT is None:
-        raise RuntimeError("Could not find the earmark package from " + str(_HERE))
+        raise RuntimeError("Could not find the executive_reader package from " + str(_HERE))
     if str(SOURCE_ROOT) not in sys.path:
         sys.path.insert(0, str(SOURCE_ROOT))
     return SOURCE_ROOT

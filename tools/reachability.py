@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "desktop" / "src"
 TESTS = ROOT / "desktop" / "tests"
-PACKAGE = "earmark"
+PACKAGE = "executive_reader"
 
 _PROBE = """
 import json, runpy, sys

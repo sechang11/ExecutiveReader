@@ -97,7 +97,7 @@ class Hotkeys:
             return
         self._ready.clear()
         self._thread = threading.Thread(target=self._run, daemon=True,
-                                        name="earmark-hotkeys")
+                                        name="executive-reader-hotkeys")
         self._thread.start()
         self._ready.wait(timeout=5.0)
 

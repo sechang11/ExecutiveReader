@@ -21,10 +21,10 @@ from _paths import install
 
 install()
 
-from earmark.capture import claude_transcript as ct
-from earmark.capture import clipboard, files, ladder
-from earmark.hotkeys import MOD_ALT, MOD_CONTROL, MOD_SHIFT, HotkeyError, parse
-from earmark.tts import espeak_addon
+from executive_reader.capture import claude_transcript as ct
+from executive_reader.capture import clipboard, files, ladder
+from executive_reader.hotkeys import MOD_ALT, MOD_CONTROL, MOD_SHIFT, HotkeyError, parse
+from executive_reader.tts import espeak_addon
 
 SKIPPED = "SKIP"
 
@@ -271,7 +271,7 @@ def test_project_slug_matches_how_claude_code_writes_it():
 # --- hotkeys -------------------------------------------------------------
 
 def test_hotkey_parsing_covers_the_shipped_defaults():
-    from earmark.config import Config
+    from executive_reader.config import Config
     for name, spec in Config().hotkeys.items():
         mods, key = parse(spec)
         assert key, name + " parsed to no key"
@@ -384,7 +384,7 @@ class _FakeResponse:
 
 def _with_fake_urlopen(handler):
     """Swap urlopen for the duration of a test."""
-    from earmark.tts import download as dl
+    from executive_reader.tts import download as dl
     import urllib.request
     real = urllib.request.urlopen
     dl_real = getattr(dl.urllib.request, "urlopen", real)
@@ -397,7 +397,7 @@ def _with_fake_urlopen(handler):
 def test_a_download_lands_at_its_final_name_only_when_complete():
     """It writes to .part and renames, so an interrupted fetch never leaves a
     truncated file that looks finished."""
-    from earmark.tts import download as dl
+    from executive_reader.tts import download as dl
     seen = {}
 
     def handler(request, timeout=None):
@@ -418,7 +418,7 @@ def test_a_download_lands_at_its_final_name_only_when_complete():
 
 def test_an_interrupted_download_resumes_instead_of_restarting():
     """330 MB is too much to fetch twice because a connection dropped."""
-    from earmark.tts import download as dl
+    from executive_reader.tts import download as dl
     seen = {}
 
     def handler(request, timeout=None):
@@ -440,7 +440,7 @@ def test_an_interrupted_download_resumes_instead_of_restarting():
 
 
 def test_a_complete_file_is_not_downloaded_again():
-    from earmark.tts import download as dl
+    from executive_reader.tts import download as dl
 
     def handler(request, timeout=None):
         raise AssertionError("should not have fetched anything")
@@ -461,7 +461,7 @@ def test_the_server_saying_the_range_is_satisfied_means_finished():
     as an error it would restart a completed download."""
     import urllib.error
 
-    from earmark.tts import download as dl
+    from executive_reader.tts import download as dl
 
     def handler(request, timeout=None):
         raise urllib.error.HTTPError("u", 416, "Range Not Satisfiable", {}, None)
@@ -480,7 +480,7 @@ def test_the_server_saying_the_range_is_satisfied_means_finished():
 def test_a_real_error_is_not_swallowed():
     import urllib.error
 
-    from earmark.tts import download as dl
+    from executive_reader.tts import download as dl
 
     def handler(request, timeout=None):
         raise urllib.error.HTTPError("u", 404, "Not Found", {}, None)
@@ -501,7 +501,7 @@ def test_a_real_error_is_not_swallowed():
 
 def test_progress_is_reported_against_the_full_size_when_resuming():
     """Otherwise a resumed download shows a bar that starts near the end."""
-    from earmark.tts import download as dl
+    from executive_reader.tts import download as dl
     reports = []
 
     def handler(request, timeout=None):
@@ -523,7 +523,7 @@ def test_progress_is_reported_against_the_full_size_when_resuming():
 
 
 def test_sizes_are_reported_in_units_a_person_reads():
-    from earmark.tts.download import human
+    from executive_reader.tts.download import human
     assert human(512) == "512 B"
     assert human(1536).endswith("KB")
     assert human(330 * 1024 * 1024).startswith("330")

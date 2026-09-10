@@ -23,11 +23,11 @@ install()
 
 import numpy as np
 
-import earmark.app as app_module
-from earmark.app import App
-from earmark.config import Config
-from earmark.document import Document
-from earmark.store.db import Store
+import executive_reader.app as app_module
+from executive_reader.app import App
+from executive_reader.config import Config
+from executive_reader.document import Document
+from executive_reader.store.db import Store
 
 SKIPPED = "SKIP"
 
@@ -312,7 +312,7 @@ def test_a_short_pdf_is_not_mistaken_for_a_scanned_one():
     a document whose text had been extracted perfectly. Found by writing this
     test, not by anything failing in use.
     """
-    from earmark.capture import files as file_reader
+    from executive_reader.capture import files as file_reader
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "note.pdf"
         _minimal_pdf(path, ["A short note.", "Two lines only."])
@@ -323,7 +323,7 @@ def test_a_short_pdf_is_not_mistaken_for_a_scanned_one():
 
 
 def test_a_pdf_with_no_text_layer_is_flagged_for_ocr():
-    from earmark.capture import files as file_reader
+    from executive_reader.capture import files as file_reader
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "scan.pdf"
         _minimal_pdf(path, [])
@@ -343,7 +343,7 @@ def test_an_unreadable_file_reports_rather_than_failing_silently():
 
 def test_a_missing_clipboard_reports_rather_than_reading_nothing():
     with temp_app() as app:
-        from earmark.capture import clipboard
+        from executive_reader.capture import clipboard
         real = clipboard.capture
         clipboard.capture = lambda: None
         errors: list[str] = []
@@ -356,7 +356,7 @@ def test_a_missing_clipboard_reports_rather_than_reading_nothing():
 
 
 def test_claude_sessions_are_listed_and_readable():
-    from earmark.capture import claude_transcript as ct
+    from executive_reader.capture import claude_transcript as ct
     sessions = ct.sessions(limit=3)
     if not sessions:
         return SKIPPED
@@ -393,7 +393,7 @@ def test_sleep_timer_is_set_and_cleared():
 
 
 def test_reloading_the_dictionary_picks_up_a_new_rule():
-    from earmark.textproc.pronounce import Rule
+    from executive_reader.textproc.pronounce import Rule
     with temp_app() as app:
         app.store.upsert_rule(Rule(pattern="zzq", replacement="zed zed queue"))
         app.reload_dictionary()
@@ -403,7 +403,7 @@ def test_reloading_the_dictionary_picks_up_a_new_rule():
 def test_editing_a_pronunciation_discards_audio_made_under_the_old_rule():
     """Otherwise the change lands several sentences later, at a moment nobody
     can predict, which is indistinguishable from it not working."""
-    from earmark.textproc.pronounce import Rule
+    from executive_reader.textproc.pronounce import Rule
     with temp_app() as app:
         app.read(Document(text="The zzq is here. Another sentence. A third one. "
                                "And a fourth.", title="Rules", uri="test://rules"))

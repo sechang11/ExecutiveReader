@@ -52,7 +52,7 @@ class Addon:
 
 def detect() -> Addon:
     """Look for eSpeak on this machine. Never installs or downloads."""
-    override = os.environ.get("EARMARK_ESPEAK_LIBRARY", "").strip()
+    override = os.environ.get("EXECUTIVE_READER_ESPEAK_LIBRARY", "").strip()
     if override and Path(override).is_file():
         return Addon(present=True, library=override)
 

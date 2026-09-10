@@ -25,7 +25,7 @@ def download(url: str, dest: Path, on_progress: ProgressFn | None = None,
 
     part = dest.with_suffix(dest.suffix + ".part")
     have = part.stat().st_size if part.exists() else 0
-    req = urllib.request.Request(url, headers={"User-Agent": "Earmark/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Executive Reader/1.0"})
     if have:
         req.add_header("Range", "bytes=" + str(have) + "-")
 

@@ -54,7 +54,7 @@ class TrayApp(QObject):
         self.library.read_uri.connect(self._reopen)
 
         self.tray = QSystemTrayIcon(speaker_icon(active=False))
-        self.tray.setToolTip("Earmark")
+        self.tray.setToolTip("Executive Reader")
         self.tray.setContextMenu(self._menu())
         self.tray.activated.connect(self._tray_clicked)
         self.tray.show()
@@ -142,12 +142,12 @@ class TrayApp(QObject):
     @Slot(str)
     def _on_status(self, message: str) -> None:
         self.player.set_status(message)
-        self.tray.setToolTip("Earmark — " + message)
+        self.tray.setToolTip("Executive Reader — " + message)
 
     @Slot(str)
     def _on_error(self, message: str) -> None:
         self.player.set_status(message)
-        self.tray.showMessage("Earmark", message, speaker_icon(active=False), 4000)
+        self.tray.showMessage("Executive Reader", message, speaker_icon(active=False), 4000)
 
     @Slot(str)
     def _on_state(self, state: str) -> None:

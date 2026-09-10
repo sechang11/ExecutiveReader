@@ -1,4 +1,4 @@
-"""Entry point:  python -m earmark"""
+"""Entry point:  python -m executive_reader"""
 from __future__ import annotations
 
 import argparse
@@ -45,7 +45,7 @@ def _gui() -> int:
     from .ui.tray import TrayApp
 
     qt_app = QApplication(sys.argv)
-    qt_app.setApplicationName("Earmark")
+    qt_app.setApplicationName("Executive Reader")
     qt_app.setQuitOnLastWindowClosed(False)  # the tray keeps it alive
 
     app = App()
@@ -60,7 +60,7 @@ def _gui() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        prog="earmark", description="Read your screen, files and Claude sessions aloud.")
+        prog="executive_reader", description="Read your screen, files and Claude sessions aloud.")
     parser.add_argument("--file", type=Path, help="read a PDF, EPUB, DOCX or text file")
     parser.add_argument("--text", help="read this text")
     parser.add_argument("--clipboard", action="store_true", help="read the clipboard")

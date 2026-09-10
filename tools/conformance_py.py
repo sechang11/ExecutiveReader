@@ -18,8 +18,8 @@ sys.stdout.reconfigure(encoding="utf-8")
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "desktop" / "src"))
 
-from earmark.textproc import normalize as normalize_mod  # noqa: E402
-from earmark.textproc import symbols  # noqa: E402
+from executive_reader.textproc import normalize as normalize_mod  # noqa: E402
+from executive_reader.textproc import symbols  # noqa: E402
 
 
 # Called directly, with no getattr fallback on purpose. This harness once

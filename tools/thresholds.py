@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "desktop" / "src" / "earmark"
+SRC = ROOT / "desktop" / "src" / "executive_reader"
 TESTS = ROOT / "desktop" / "tests"
 
 #: Values too common to be thresholds; flagging them is noise.

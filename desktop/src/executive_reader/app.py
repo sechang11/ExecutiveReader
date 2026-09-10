@@ -271,7 +271,7 @@ class App:
         self._claude_tail = ct.Tail(target, self.config.claude_read_thinking)
         self._claude_stop.clear()
         self._claude_thread = threading.Thread(target=self._claude_loop, daemon=True,
-                                               name="earmark-claude")
+                                               name="executive-reader-claude")
         self._claude_thread.start()
         self.on_status("Watching " + target.name[:8] + " for new replies.")
 

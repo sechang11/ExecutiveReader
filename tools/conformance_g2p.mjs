@@ -67,7 +67,7 @@ if (!existsSync(dictPath)) {
 loadDict(gunzipSync(readFileSync(dictPath)).toString('utf8'));
 loadHomographs(JSON.parse(readFileSync(homPath, 'utf8')));
 
-const py = process.env.EARMARK_PYTHON
+const py = process.env.EXECUTIVE_READER_PYTHON
   || join(root, 'desktop', '.venv', 'Scripts', 'python.exe');
 const pyOut = JSON.parse(execFileSync(py, [join(root, 'tools', 'conformance_g2p_py.py')], {
   input: JSON.stringify(CASES),

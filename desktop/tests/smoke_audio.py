@@ -15,10 +15,10 @@ from _paths import install
 
 install()
 
-from earmark.config import Config
-from earmark.document import Document
-from earmark.player.engine import Reader
-from earmark.tts.registry import Registry
+from executive_reader.config import Config
+from executive_reader.document import Document
+from executive_reader.player.engine import Reader
+from executive_reader.tts.registry import Registry
 
 TEXT = ("Aloud is working. This is the second sentence, read at normal speed. "
         "And this third one proves that skipping ahead lands cleanly.")

@@ -11,8 +11,8 @@ from _paths import REPO_ROOT, install
 
 install()
 
-from earmark.tts import kokoro_direct as kd
-from earmark.tts import phonemes as ph
+from executive_reader.tts import kokoro_direct as kd
+from executive_reader.tts import phonemes as ph
 
 SKIPPED = "SKIP"
 
@@ -211,8 +211,8 @@ def test_the_app_survives_being_packaged_without_the_vendored_data():
     voices rather than crash, and must say which piece is missing: a user told
     "not installed" after downloading 330 MB of model will download it again.
     """
-    from earmark.tts import kokoro_direct as direct
-    from earmark.tts.registry import Registry
+    from executive_reader.tts import kokoro_direct as direct
+    from executive_reader.tts.registry import Registry
 
     real_ph, real_kd = ph.vendor_dir, direct.vendor_dir
     ph.vendor_dir = lambda: None
@@ -240,7 +240,7 @@ def test_the_app_survives_being_packaged_without_the_vendored_data():
 
 def test_missing_pieces_are_reported_distinctly():
     """Three different absences with three different fixes."""
-    from earmark.tts.registry import Registry
+    from executive_reader.tts.registry import Registry
     kokoro = Registry().kokoro
     # The model is genuinely not downloaded on this machine.
     assert kokoro.blocked_by == "the voice model download", kokoro.blocked_by
@@ -255,7 +255,7 @@ def test_shared_data_is_read_from_the_canonical_copy():
     can go stale while believing it was the source, and a stale dictionary is
     silent: words simply come out pronounced by an older rule.
     """
-    from earmark.tts import kokoro_direct as direct
+    from executive_reader.tts import kokoro_direct as direct
     from _paths import REPO_ROOT
 
     assert REPO_ROOT is not None
@@ -307,7 +307,7 @@ def test_the_synced_copies_match_the_canonical_ones():
 def test_the_phoneme_alphabet_is_complete():
     """A truncated alphabet is silent. Tokenization drops what it does not
     recognise, so words lose sounds and nothing reports an error."""
-    from earmark.tts import kokoro_direct as direct
+    from executive_reader.tts import kokoro_direct as direct
     assert len(direct.vocabulary()) == 115, len(direct.vocabulary())
 
 
@@ -339,14 +339,14 @@ def _fake_piper_config():
 def test_piper_brackets_and_interleaves_its_phonemes():
     """Part of the encoding, not decoration: a model trained with a pad token
     between every phoneme produces noise without them."""
-    from earmark.tts import piper_direct
+    from executive_reader.tts import piper_direct
     ids, missing = piper_direct.phoneme_ids("kæt", _fake_piper_config())
     assert ids == [1, 10, 0, 11, 0, 12, 0, 2], ids
     assert missing == []
 
 
 def test_piper_reports_symbols_its_voice_cannot_say():
-    from earmark.tts import piper_direct
+    from executive_reader.tts import piper_direct
     _ids, missing = piper_direct.phoneme_ids("kæt☃", _fake_piper_config())
     assert missing == ["☃"], missing
 
@@ -354,7 +354,7 @@ def test_piper_reports_symbols_its_voice_cannot_say():
 def test_piper_speed_is_a_duration_not_a_rate():
     """Length scale is the reciprocal of speed, which is why fast reading keeps
     its pitch instead of sounding resampled."""
-    from earmark.tts import piper_direct
+    from executive_reader.tts import piper_direct
     config = _fake_piper_config()
     assert abs(piper_direct.scales(config, 2.0)[1] - 0.5) < 1e-6
     assert abs(piper_direct.scales(config, 0.5)[1] - 2.0) < 1e-6
@@ -363,13 +363,13 @@ def test_piper_speed_is_a_duration_not_a_rate():
 
 
 def test_piper_uses_each_voices_own_sample_rate():
-    from earmark.tts import piper_direct
+    from executive_reader.tts import piper_direct
     assert piper_direct.sample_rate(_fake_piper_config()) == 16000
     assert piper_direct.sample_rate({}) == piper_direct.DEFAULT_RATE
 
 
 def test_a_voice_without_a_phoneme_table_is_refused_clearly():
-    from earmark.tts import piper_direct
+    from executive_reader.tts import piper_direct
     try:
         piper_direct.phoneme_ids("kat", {"audio": {"sample_rate": 22050}})
     except piper_direct.PiperUnavailable as exc:
@@ -388,7 +388,7 @@ def test_piper_needs_no_copyleft_package():
 def test_training_your_own_voice_remains_possible():
     """The drop-in path must survive the licence change: a fine-tuned model is
     an .onnx and an .onnx.json, and both run here without piper-tts."""
-    from earmark.tts.piper_engine import PiperEngine
+    from executive_reader.tts.piper_engine import PiperEngine
     engine = PiperEngine()
     assert engine.library_present, "onnxruntime and the dictionary are enough"
     assert hasattr(engine, "install_custom")

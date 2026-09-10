@@ -79,7 +79,7 @@ def copy_selection(restore: bool = True, settle: float = 0.12) -> Document | Non
         return None
 
     previous = read_text() if restore else ""
-    marker = "\x00earmark\x00"
+    marker = "\x00executive-reader\x00"
     set_text(marker)
 
     win32api.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
@@ -124,7 +124,7 @@ class Watcher:
             return
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, daemon=True,
-                                        name="earmark-clipboard")
+                                        name="executive-reader-clipboard")
         self._thread.start()
 
     def stop(self) -> None:

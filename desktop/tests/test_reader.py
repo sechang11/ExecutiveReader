@@ -13,9 +13,9 @@ install()
 
 import numpy as np
 
-from earmark.config import Config
-from earmark.document import Document
-from earmark.player.engine import IDLE, PAUSED, PLAYING, Reader
+from executive_reader.config import Config
+from executive_reader.document import Document
+from executive_reader.player.engine import IDLE, PAUSED, PLAYING, Reader
 
 
 class StubSink:
@@ -184,7 +184,7 @@ def test_the_speed_floor_holds_against_zero_and_negatives():
 
 def test_sapi_rates_stay_inside_the_range_the_api_accepts():
     """SAPI defines -10 to 10. Sending more is not faster, it is invalid."""
-    from earmark.tts.sapi import SapiEngine
+    from executive_reader.tts.sapi import SapiEngine
     for speed in (0.001, 0.5, 1.0, 2.5, 3.0, 99.0):
         rate = SapiEngine._rate_for(speed)
         assert -10 <= rate <= 10, (speed, rate)

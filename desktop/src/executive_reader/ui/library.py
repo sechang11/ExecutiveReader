@@ -33,7 +33,7 @@ class Library(QMainWindow):
     def __init__(self, app) -> None:
         super().__init__()
         self.app = app
-        self.setWindowTitle("Earmark")
+        self.setWindowTitle("Executive Reader")
         self.resize(860, 620)
 
         tabs = QTabWidget()

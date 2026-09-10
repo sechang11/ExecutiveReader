@@ -1,4 +1,4 @@
-"""User settings, persisted as JSON under %APPDATA%/Earmark/config.json."""
+"""User settings, persisted as JSON under %APPDATA%/Executive Reader/config.json."""
 from __future__ import annotations
 
 import json

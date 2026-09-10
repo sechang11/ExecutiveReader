@@ -21,7 +21,7 @@ from pathlib import Path
 def shared_dir() -> Path | None:
     """Locate shared/ by walking up from this file.
 
-    Layout is repo/shared and repo/desktop/src/earmark/textproc/, so the search
+    Layout is repo/shared and repo/desktop/src/executive_reader/textproc/, so the search
     starts four levels up and allows for the app being moved.
     """
     here = Path(__file__).resolve()

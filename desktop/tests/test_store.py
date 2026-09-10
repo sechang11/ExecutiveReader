@@ -11,9 +11,9 @@ from _paths import install
 
 install()
 
-from earmark.store.anchors import Anchor
-from earmark.store.db import Store
-from earmark.textproc.pronounce import Rule
+from executive_reader.store.anchors import Anchor
+from executive_reader.store.db import Store
+from executive_reader.textproc.pronounce import Rule
 
 
 @contextlib.contextmanager
@@ -191,7 +191,7 @@ def test_anchor_prefers_the_right_sentence_over_a_similar_one():
 
 def test_rules_stamp_detects_a_shared_data_change():
     """A stored position records which rules produced it."""
-    from earmark.textproc import shared_rules
+    from executive_reader.textproc import shared_rules
     with temp_store() as store:
         store.touch("test://doc", "Doc", "file", "", 5)
         store.save_position("test://doc", 3, Anchor.create(SEGMENTS, 3))
@@ -210,7 +210,7 @@ def test_rules_stamp_detects_a_shared_data_change():
 
 def test_unstamped_positions_are_not_treated_as_changed():
     """Rows saved before stamping existed must not all claim to be stale."""
-    from earmark.textproc import shared_rules
+    from executive_reader.textproc import shared_rules
     with temp_store() as store:
         store.touch("test://doc", "Doc", "file", "", 5)
         original = shared_rules.fingerprint
@@ -230,7 +230,7 @@ def test_exact_match_is_kept_when_rules_changed():
     correct, and dropping to fuzzy loses the context tiebreak that separates
     repeated sentences. Confidence is downgraded instead.
     """
-    from earmark.store.anchors import AMBIGUOUS, EXACT
+    from executive_reader.store.anchors import AMBIGUOUS, EXACT
     segments = ["Intro.", "Same line.", "Middle.", "Same line.", "Tail."]
 
     # A sentence that appears once: exact, and verified while the stamps agree.
@@ -256,7 +256,7 @@ def test_exact_match_is_kept_when_rules_changed():
 def test_fuzzy_matching_breaks_ties_on_context():
     """Taking the first best score picks the wrong copy when a rewritten
     sentence appears twice."""
-    from earmark.store.anchors import FUZZY
+    from executive_reader.store.anchors import FUZZY
     old = ["Alpha.", "Serve it w/ cream.", "Beta.", "Serve it w/ cream.", "Gamma."]
     new = ["Alpha.", "Serve it with cream.", "Beta.", "Serve it with cream.",
            "Gamma."]
@@ -269,8 +269,8 @@ def test_fuzzy_matching_breaks_ties_on_context():
 def test_resume_message_is_worded_per_recovery_path():
     """An exact quote match is right whatever the stamp says, so it must not
     claim to be approximate. Only the paths that guessed say so."""
-    from earmark.app import position_note
-    from earmark.store.anchors import (AMBIGUOUS, BOUNDARY, EXACT,
+    from executive_reader.app import position_note
+    from executive_reader.store.anchors import (AMBIGUOUS, BOUNDARY, EXACT,
                                    FUZZY, HINT, Match)
 
     assert position_note(Match(3, EXACT, verified=True), False) == ""
@@ -288,8 +288,8 @@ def test_every_recovery_path_has_distinct_wording():
     """Four situations, four accounts. The extension words the same four, so a
     silent overlap here would have the two halves describe one situation
     differently to the same person."""
-    from earmark.app import position_note
-    from earmark.store.anchors import (AMBIGUOUS, BOUNDARY, FUZZY,
+    from executive_reader.app import position_note
+    from executive_reader.store.anchors import (AMBIGUOUS, BOUNDARY, FUZZY,
                                    HINT, Match)
 
     notes = [position_note(Match(1, how), changed)
@@ -308,9 +308,9 @@ def test_absent_stamp_is_never_reported_as_changed_rules():
     established. It must read as a changed page instead, which is the honest
     account of a sentence that no longer matches.
     """
-    from earmark.app import position_note
-    from earmark.store.anchors import FUZZY, Match
-    from earmark.textproc import shared_rules
+    from executive_reader.app import position_note
+    from executive_reader.store.anchors import FUZZY, Match
+    from executive_reader.textproc import shared_rules
 
     with temp_store() as store:
         store.touch("test://doc", "Doc", "file", "", 5)
@@ -333,7 +333,7 @@ def test_absent_stamp_is_never_reported_as_changed_rules():
 
 def test_five_situations_classify_per_the_contract():
     """docs/anchor-vocabulary.md, tried most certain first."""
-    from earmark.store.anchors import (AMBIGUOUS, BOUNDARY, EXACT, FUZZY,
+    from executive_reader.store.anchors import (AMBIGUOUS, BOUNDARY, EXACT, FUZZY,
                                        HINT, Anchor)
     cases = [
         (EXACT, ["A.", "The cat sat down and then it slept.", "B."],
@@ -358,7 +358,7 @@ def test_boundary_needs_whole_words_not_raw_substrings():
     """"the cat sat down" inside "the cat sat downstream" is a different
     sentence, not a moved boundary. Without whole-word padding it reports a
     confident boundary match."""
-    from earmark.store.anchors import BOUNDARY, Anchor
+    from executive_reader.store.anchors import BOUNDARY, Anchor
     found = Anchor.create(["The cat sat down"], 0).locate(
         ["The cat sat downstream today and left"])
     assert found.how != BOUNDARY, "a lengthened word is not a moved boundary"
@@ -368,7 +368,7 @@ def test_boundary_requires_a_substantial_quote():
     """A short sentence must not match half the document. Counted in words,
     because any character floor high enough to reject "Yes." also rejects
     "The cat sat down.", which is a real half of a split sentence."""
-    from earmark.store.anchors import BOUNDARY, Anchor
+    from executive_reader.store.anchors import BOUNDARY, Anchor
     trivial = Anchor.create(["Yes."], 0).locate(
         ["Yes it did happen that way.", "No."])
     assert trivial.how != BOUNDARY, "too short to anchor anything"
@@ -381,7 +381,7 @@ def test_boundary_requires_a_substantial_quote():
 def test_split_detection_survives_punctuation_at_the_seam():
     """Splitting adds a period the saved quote never had, so comparing raw
     text finds no splits at all."""
-    from earmark.store.anchors import BOUNDARY, Anchor
+    from executive_reader.store.anchors import BOUNDARY, Anchor
     found = Anchor.create(["the cat sat down and then it slept"], 0).locate(
         ["The cat sat down.", "And then it slept."])
     assert found.how == BOUNDARY, found.how
@@ -392,7 +392,7 @@ def test_identical_surroundings_fall_through_to_the_recorded_index():
     """Contract clause: when repeated copies sit in identical surroundings the
     neighbours cannot decide either, so the tiebreak falls to the recorded
     index and nothing was actually chosen."""
-    from earmark.store.anchors import AMBIGUOUS, Anchor
+    from executive_reader.store.anchors import AMBIGUOUS, Anchor
     table = ["Row.", "Total: 5", "Row.", "Total: 5", "Row.", "Total: 5", "Row."]
     anchor = Anchor.create(table, 3)
     found = anchor.locate(table)
@@ -403,8 +403,8 @@ def test_identical_surroundings_fall_through_to_the_recorded_index():
 def test_ambiguous_message_never_claims_context_resolved_it():
     """Same clause, user-facing half. The label and the position are honest;
     claiming the surroundings picked the copy would not be."""
-    from earmark.app import position_note
-    from earmark.store.anchors import AMBIGUOUS, Match
+    from executive_reader.app import position_note
+    from executive_reader.store.anchors import AMBIGUOUS, Match
     note = position_note(Match(3, AMBIGUOUS), False).lower()
     assert "more than once" in note
     for claim in ("context", "neighbour", "surrounding", "chose", "chosen"):
@@ -432,7 +432,7 @@ def test_the_tie_band_is_narrow_enough_to_trust_a_clear_winner():
     would pull the weaker candidate in and let its neighbours overrule the
     score, which resolves to a different sentence.
     """
-    from earmark.store.anchors import FUZZY, Anchor
+    from executive_reader.store.anchors import FUZZY, Anchor
 
     target = " ".join(_WORDS) + "."
     higher = " ".join(_WORDS[:22]) + " zulu zulu zulu."          # 0.88
@@ -462,7 +462,7 @@ def test_the_tie_band_is_wide_enough_to_consult_context_when_scores_are_close():
     neighbours decide. Shrinking the band to 0.02 or 0.0 lets the higher score
     win alone and resolves somewhere else.
     """
-    from earmark.store.anchors import FUZZY, Anchor
+    from executive_reader.store.anchors import FUZZY, Anchor
 
     target = " ".join(_WORDS) + "."
     higher = " ".join(_WORDS[:22]) + " zulu zulu zulu."        # 0.88
@@ -491,7 +491,7 @@ def test_equal_candidates_tie_at_any_band_width():
     every width, including zero. This asserts the tie-break works; it says
     nothing about how wide the band is.
     """
-    from earmark.store.anchors import Anchor
+    from executive_reader.store.anchors import Anchor
 
     repeated = ["Alpha.", "Serve it w/ cream.", "Beta.", "Serve it w/ cream.",
                 "Gamma."]

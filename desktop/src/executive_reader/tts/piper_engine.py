@@ -6,7 +6,7 @@ voice is an .onnx plus an .onnx.json holding its own phoneme table, so the
 package bought convenience rather than capability. See CAVEATS.md.
 
 This is the path for a voice fine-tuned on your own recordings: export the
-model, drop both files into the piper folder under %APPDATA%/Earmark/voices,
+model, drop both files into the piper folder under %APPDATA%/Executive Reader/voices,
 and it appears in the picker.
 
 Licences differ per catalogue voice because they come from different source

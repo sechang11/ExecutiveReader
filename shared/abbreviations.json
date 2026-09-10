@@ -1,5 +1,5 @@
 {
-  "_comment": "Tokens that end in a period WITHOUT ending a sentence. Consumed by extension/src/core/segment.js and desktop/src/earmark/textproc/segment.py.",
+  "_comment": "Tokens that end in a period WITHOUT ending a sentence. Consumed by extension/src/core/segment.js and desktop/src/executive_reader/textproc/segment.py.",
   "_affects_stored_text": true,
   "titles": [
     "Mr",

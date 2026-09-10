@@ -59,10 +59,10 @@ class Reader:
         self._cache_lock = threading.Lock()
 
         self._worker = threading.Thread(target=self._run, daemon=True,
-                                        name="earmark-playback")
+                                        name="executive-reader-playback")
         self._worker.start()
         self._prefetcher = threading.Thread(target=self._prefetch_loop, daemon=True,
-                                            name="earmark-prefetch")
+                                            name="executive-reader-prefetch")
         self._prefetcher.start()
 
     # --- loading ---------------------------------------------------------

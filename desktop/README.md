@@ -1,4 +1,4 @@
-# Earmark
+# Executive Reader
 
 Reads your screen, your files and your Claude Code sessions out loud, on
 Windows, entirely offline.
@@ -43,15 +43,15 @@ your TensorFlow, matplotlib, numba and ultralytics installs require numpy 1.
 Start it in the tray:
 
 ```powershell
-C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\desktop\earmark.cmd
+C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\desktop\executive-reader.cmd
 ```
 
-Use `earmark-console.cmd` instead if you want to see errors in a window.
+Use `executive-reader-console.cmd` instead if you want to see errors in a window.
 
 Read something without the tray:
 
 ```powershell
-C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\desktop\earmark-console.cmd --file "C:\path\to\book.pdf"
+C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\desktop\executive-reader-console.cmd --file "C:\path\to\book.pdf"
 ```
 
 ## Chrome needs one flag
@@ -121,7 +121,8 @@ exported Piper model, drop the `.onnx` and its `.onnx.json` into:
 %APPDATA%\Earmark\voices\piper\
 ```
 
-It then appears in the voice picker like any other.
+It then appears in the voice picker like any other. That folder keeps the
+old product name deliberately; see "Where your data lives" below.
 
 ## Reading Claude Code
 
@@ -151,6 +152,21 @@ spoken as they land.
 
 Shortcuts another app already owns are reported in the Settings tab instead of
 failing silently. Edit them in `%APPDATA%\Earmark\config.json`.
+
+## Where your data lives
+
+`%APPDATA%\Earmark\`, which keeps the old product name on purpose.
+
+The folder holds the settings file, the SQLite database with your reading
+history and bookmarks, and any downloaded voice models. Renaming it means moving
+a folder *and* the database file inside it, and getting only the folder right is
+how a previous rename here silently started a fresh, empty history while every
+test passed. The internal URI scheme is frozen for the same reason: it appears
+inside saved positions, so changing it would orphan them.
+
+If it is ever renamed, it needs the migration already in `config.py` and
+`store/db.py` rather than a search and replace, and it needs verifying against
+real data afterwards rather than against a fixture.
 
 ## Resuming, bookmarks and history
 
@@ -198,7 +214,7 @@ numbers, reads links as their domain, and rejoins hard-wrapped prose. On the
 
 ```
 desktop/
-  src/earmark/
+  src/executive_reader/
     app.py          wiring, free of Qt so it can be driven headlessly
     capture/        selection, files, accessibility, clipboard, OCR, Claude
     tts/            SAPI, Kokoro, Piper behind one interface

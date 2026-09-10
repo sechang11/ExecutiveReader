@@ -28,7 +28,7 @@ def _qt():
     except Exception:
         return None
     try:
-        return QApplication.instance() or QApplication(["earmark-tests"])
+        return QApplication.instance() or QApplication(["executive-reader-tests"])
     except Exception:
         return None
 
@@ -38,8 +38,8 @@ def test_the_tray_app_builds_and_shuts_down_cleanly():
     if qt is None:
         print("   (no Qt display; skipping)")
         return SKIPPED
-    from earmark.app import App
-    from earmark.ui.tray import TrayApp
+    from executive_reader.app import App
+    from executive_reader.ui.tray import TrayApp
 
     app = App()
     tray = TrayApp(app, qt)
@@ -62,8 +62,8 @@ def test_the_library_populates_every_tab():
     qt = _qt()
     if qt is None:
         return SKIPPED
-    from earmark.app import App
-    from earmark.ui.library import Library
+    from executive_reader.app import App
+    from executive_reader.ui.library import Library
 
     app = App()
     window = Library(app)
@@ -84,7 +84,7 @@ def test_the_mini_player_reflects_state_without_a_document():
     qt = _qt()
     if qt is None:
         return SKIPPED
-    from earmark.ui.miniplayer import MiniPlayer
+    from executive_reader.ui.miniplayer import MiniPlayer
 
     player = MiniPlayer()
     try:
@@ -106,7 +106,7 @@ def test_icons_render_at_every_size_they_are_asked_for():
     qt = _qt()
     if qt is None:
         return SKIPPED
-    from earmark.ui.icons import glyph_icon, speaker_icon
+    from executive_reader.ui.icons import glyph_icon, speaker_icon
 
     for size in (16, 32, 64, 128):
         assert not speaker_icon(size, active=True).isNull()
@@ -119,10 +119,10 @@ def test_icons_render_at_every_size_they_are_asked_for():
 
 def test_command_line_accepts_the_documented_flags():
     import argparse
-    import earmark.__main__ as entry
+    import executive_reader.__main__ as entry
 
     # Rebuild the parser the same way main() does, without running anything.
-    parser = argparse.ArgumentParser(prog="earmark")
+    parser = argparse.ArgumentParser(prog="executive_reader")
     parser.add_argument("--file", type=Path)
     parser.add_argument("--text")
     parser.add_argument("--clipboard", action="store_true")
@@ -138,7 +138,7 @@ def test_command_line_accepts_the_documented_flags():
 
 def test_headless_flags_choose_the_console_path():
     """Any capture flag implies no tray, so --file never opens a window."""
-    import earmark.__main__ as entry
+    import executive_reader.__main__ as entry
     source = Path(entry.__file__).read_text(encoding="utf-8")
     assert "headless = args.no_gui or args.file" in source, (
         "the headless decision moved; this test is asserting stale structure")

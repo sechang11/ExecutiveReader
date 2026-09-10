@@ -9,9 +9,9 @@ from _paths import install
 
 install()
 
-from earmark.textproc.normalize import normalize
-from earmark.textproc.pronounce import Dictionary, Rule
-from earmark.textproc.segment import segment
+from executive_reader.textproc.normalize import normalize
+from executive_reader.textproc.pronounce import Dictionary, Rule
+from executive_reader.textproc.segment import segment
 
 
 def test_abbreviations_do_not_split_sentences():
@@ -113,7 +113,7 @@ def test_empty_and_whitespace_input_is_safe():
 
 
 def test_shared_rules_are_the_source_of_truth():
-    from earmark.textproc import shared_rules
+    from executive_reader.textproc import shared_rules
     assert shared_rules.shared_dir() is not None, 'shared/ should be found from the repo'
     abbrevs = shared_rules.abbreviations({'zzz'})
     assert len(abbrevs) > 100, len(abbrevs)
@@ -122,7 +122,7 @@ def test_shared_rules_are_the_source_of_truth():
 
 
 def test_shared_pronunciations_load():
-    from earmark.textproc import shared_rules
+    from executive_reader.textproc import shared_rules
     rules = shared_rules.pronunciations([("x", "y")])
     assert len(rules) > 30, len(rules)
     by_match = {r["match"].lower(): r for r in rules}
@@ -136,14 +136,14 @@ def test_shared_pronunciations_load():
 
 def test_say_as_expansion_lives_outside_the_pronunciation_file():
     """The two shared files divide by meaning versus sound; keep them apart."""
-    from earmark.textproc import shared_rules
+    from executive_reader.textproc import shared_rules
     spoken = {r["match"].lower() for r in shared_rules.pronunciations([("x", "y")])}
     assert "i.e." not in spoken and "e.g." not in spoken, \
         "say-as belongs in normalization.json, not pronunciation.json"
 
 
 def test_shared_loader_falls_back_when_files_missing(monkeypatch=None):
-    from earmark.textproc import shared_rules
+    from executive_reader.textproc import shared_rules
     original = shared_rules.shared_dir
     shared_rules.load.cache_clear()
     shared_rules.shared_dir = lambda: None
@@ -207,7 +207,7 @@ def test_email_and_handles_survive_the_at_rule():
 
 
 def test_expansions_come_from_shared_data():
-    from earmark.textproc import shared_rules
+    from executive_reader.textproc import shared_rules
     rules = shared_rules.expansions({"zzz": "fallback"})
     matches = {r["match"].lower() for r in rules}
     assert {"i.e.", "e.g.", "etc."} <= matches, matches
@@ -237,7 +237,7 @@ def test_longest_match_wins_regardless_of_file_order():
 def test_expansion_rules_are_sorted_longest_first():
     """Order by the literal being matched, not by the compiled pattern, whose
     length shifts with regex escaping."""
-    from earmark.textproc.normalize import _expansion_rules
+    from executive_reader.textproc.normalize import _expansion_rules
     literals = [literal for literal, _pattern, _say in _expansion_rules()]
     lengths = [len(x) for x in literals]
     assert lengths == sorted(lengths, reverse=True), literals
@@ -245,7 +245,7 @@ def test_expansion_rules_are_sorted_longest_first():
 
 
 def test_match_case_flag_is_honoured():
-    from earmark.textproc import shared_rules
+    from executive_reader.textproc import shared_rules
     entries = shared_rules.expansions({"x": "y"})
     assert all("match_case" in e for e in entries), "flag must be parsed"
     # Nothing needs it yet, but the schema must express it.
@@ -254,7 +254,7 @@ def test_match_case_flag_is_honoured():
 
 def test_unknown_symbol_condition_is_ignored_not_guessed():
     """An older build must not start expanding at random on a newer file."""
-    from earmark.textproc.symbols import _matcher
+    from executive_reader.textproc.symbols import _matcher
     assert _matcher("$", "digit-after") is not None
     assert _matcher("$", "some-future-condition") is None
 
@@ -263,7 +263,7 @@ def test_unknown_symbol_condition_is_ignored_not_guessed():
 def test_output_contract_collapses_spaces_but_keeps_newlines():
     """The shared _output_contract, which lets the cross-language check assert
     equality rather than only equivalence."""
-    from earmark.textproc.symbols import tidy
+    from executive_reader.textproc.symbols import tidy
     assert tidy("a    b") == "a b"
     assert tidy("  padded  ") == "padded"
     assert tidy("a \t\t b") == "a b"
@@ -274,7 +274,7 @@ def test_output_contract_collapses_spaces_but_keeps_newlines():
 def test_symbol_stage_tidies_on_its_own():
     """tidy belongs to the symbol stage, not to the caller, so the stage agrees
     with the JavaScript side when compared in isolation."""
-    from earmark.textproc.symbols import apply, apply_symbols
+    from executive_reader.textproc.symbols import apply, apply_symbols
     assert apply_symbols("5 ° warm") == "5 degrees warm"
     assert apply("Costs $5 © today") == "Costs 5 dollars copyright today"
     assert "  " not in apply_symbols("a & b & c")
@@ -287,7 +287,7 @@ def test_a_user_override_replaces_the_shipped_rule():
     Skipping a duplicate keeps the shipped pronunciation and discards the
     user's, so the setting saves and does nothing.
     """
-    from earmark.textproc import shared_rules
+    from executive_reader.textproc import shared_rules
 
     fake = {"builtin": [{"match": "GIF", "say": "jiff"},
                         {"match": "SQL", "say": "sequel"}],
@@ -313,7 +313,7 @@ def test_no_shipped_rule_rewrites_another_rules_output():
     something neither rule intended, and nothing reports it. This holds today;
     the test is here so a future addition cannot break it quietly.
     """
-    from earmark.textproc.pronounce import Dictionary, default_rules
+    from executive_reader.textproc.pronounce import Dictionary, default_rules
 
     rules = default_rules()
     dictionary = Dictionary(rules)
@@ -326,7 +326,7 @@ def test_no_shipped_rule_rewrites_another_rules_output():
 
 def test_overrides_respect_word_boundaries_in_both_directions():
     """UI must not fire inside GUI, and env must not fire inside environment."""
-    from earmark.textproc.pronounce import Dictionary
+    from executive_reader.textproc.pronounce import Dictionary
 
     d = Dictionary()
     assert "gooey" in d.apply("the GUI is open"), d.apply("the GUI is open")
@@ -351,9 +351,9 @@ def test_applying_every_rule_twice_changes_nothing_the_second_time():
     Kept because idempotence is worth stating directly, not because it adds
     coverage. The pairwise check is the one doing the work.
     """
-    from earmark.textproc.pronounce import Dictionary
+    from executive_reader.textproc.pronounce import Dictionary
 
-    from earmark.textproc.pronounce import default_rules
+    from executive_reader.textproc.pronounce import default_rules
 
     # Built from the rule set rather than hand-written, so every rule fires.
     # A hand-picked sentence only exercises the words it happens to contain,
@@ -382,11 +382,11 @@ def test_every_shared_file_is_load_bearing():
     This blanks each file in turn and requires the behaviour to change. It
     proves the file is used; it cannot prove it is used correctly.
     """
-    from earmark.textproc import normalize as normalize_module
-    from earmark.textproc import shared_rules
-    from earmark.textproc.normalize import normalize
-    from earmark.textproc.pronounce import Dictionary
-    from earmark.textproc.segment import _ABBREV
+    from executive_reader.textproc import normalize as normalize_module
+    from executive_reader.textproc import shared_rules
+    from executive_reader.textproc.normalize import normalize
+    from executive_reader.textproc.pronounce import Dictionary
+    from executive_reader.textproc.segment import _ABBREV
 
     # Shared with the classification above, so a file cannot be listed as
     # covered here without a check that actually empties it.
@@ -437,7 +437,7 @@ def _blank_checks() -> dict:
     itself rather than about the file. Deriving one from the other makes that
     impossible rather than merely detectable.
     """
-    from earmark.textproc import shared_rules
+    from executive_reader.textproc import shared_rules
     return {
         "abbreviations": lambda: len(shared_rules.abbreviations({"mr"})),
         "pronunciation": lambda: len(shared_rules.pronunciations([("x", "y")])),

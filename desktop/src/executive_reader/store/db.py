@@ -1,6 +1,6 @@
 """History, bookmarks, pronunciation rules and per-source settings.
 
-One SQLite file under %APPDATA%/Earmark. Everything stays on this machine.
+One SQLite file under %APPDATA%/Executive Reader. Everything stays on this machine.
 """
 from __future__ import annotations
 

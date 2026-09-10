@@ -3,7 +3,7 @@
  * shared/normalization.json.
  *
  * The Python side implements the same four conditions in
- * desktop/src/earmark/textproc/symbols.py. Neither implementation may invent
+ * desktop/src/executive_reader/textproc/symbols.py. Neither implementation may invent
  * behaviour the schema does not describe, because the whole point of the shared
  * file is that both halves pronounce the same page the same way.
  *
