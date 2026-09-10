@@ -534,3 +534,40 @@ different answer from measurement.
 rather than an argument. It synthesizes variants of a sentence and reports the
 audio duration, deliberately skipping `normalize()`, because the point is
 usually to measure what a normalization rule would change.
+
+## 29. The end-of-pipeline tidy hides disagreements in the middle of it
+
+Adding two boundary inputs to the conformance corpus — `Wait.. what?` and
+`Wait.... what?` — turned up a difference nobody had seen. On four spaced
+periods the two halves produced:
+
+    python:  "Wait  what?"     (two spaces)
+    js:      "Wait what?"      (one)
+
+The dot-leader rule says a run of periods "optionally separated by spaces"
+becomes a single space. This half also swallowed the whitespace *after* the
+final dot. That is one more character than "separated by" describes, and the
+Python reading was the faithful one.
+
+It could not show up in the finished text, because `tidy()` runs at the end of
+the pipeline and collapses the double space. Only a stage-by-stage comparison
+could see it — which is the mirror of the lesson that arrived in the same round
+from the other direction, that a stage compared in isolation is not the
+pipeline. **Both comparisons are needed, and each hides what the other finds.**
+
+The rule text now spells out that the separators are between the dots. That
+sentence exists because one character of ambiguity produced two implementations.
+
+## 30. `git checkout --` is not an undo
+
+While restoring a file after a mutation test, `git checkout -- <file>` discarded
+an hour of uncommitted work in it. The mutation harness in this project writes
+the original back itself; reaching for git as well was belt-and-braces reasoning
+about a file the script had already restored, and it destroyed the changes the
+script was never touching.
+
+Nothing was lost that could not be retyped, and the tests said immediately what
+was missing. The general point stands: **the mutation-testing pattern used
+throughout this file — write a mutation, run, write the original back — must
+restore from the string it captured, never from the index.** The working tree is
+where the uncommitted work is.

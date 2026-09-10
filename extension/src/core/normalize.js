@@ -62,9 +62,27 @@ const SUPERSCRIPT_DIGITS = /[¹²³⁰-⁹]/g;
 /** A bracketed footnote marker. Three digits at most, so an array index or a
  *  bracketed year is less likely to be caught. */
 const BRACKETED_MARKER = /\[\s*\d{1,3}\s*\]/g;
-/** Four or more periods, optionally spaced: a table-of-contents leader. */
-const DOT_LEADER = /(?:\.[ \t]*){4,}/g;
-const REPEATED_TERMINATOR = /([.!?])\1+/g;
+/**
+ * Four or more periods, optionally spaced: a table-of-contents leader.
+ *
+ * The spaces are the ones BETWEEN the dots. An earlier version also swallowed
+ * the whitespace after the final dot, which is one more character than
+ * "separated by" describes, and it left this half a space short of the other at
+ * this stage. The end-of-pipeline tidy hid the difference in the finished text,
+ * so only a stage-by-stage comparison could see it.
+ */
+const DOT_LEADER = /\.(?:[ \t]*\.){3,}/g;
+
+/**
+ * Exactly three periods is an ellipsis; two is a typo.
+ *
+ * Four or more never reach here — `dot_leaders` has already turned them into a
+ * space, which is the whole reason it runs first. Bang and question runs still
+ * collapse to one of themselves.
+ */
+const THREE_PERIODS = /\.{3}/g;
+const TWO_PERIODS = /\.{2}/g;
+const REPEATED_BANG = /([!?])\1+/g;
 const EMOJI = /\p{Extended_Pictographic}/gu;
 
 /** @param {string} text */
@@ -83,10 +101,19 @@ export function applyCollapse(text) {
   if (COLLAPSE.footnote_markers) {
     out = out.replace(SUPERSCRIPT_DIGITS, '').replace(BRACKETED_MARKER, '');
   }
-  // Before repeated_punctuation, which would otherwise turn a leader into a
-  // single period and make it look like the end of a sentence.
+  // Before repeated_punctuation, which would otherwise turn a leader into an
+  // ellipsis and read it as a trailing-off in the middle of a contents page.
   if (COLLAPSE.dot_leaders) out = out.replace(DOT_LEADER, ' ');
-  if (COLLAPSE.repeated_punctuation) out = out.replace(REPEATED_TERMINATOR, '$1');
+  if (COLLAPSE.repeated_punctuation) {
+    // Not tidying. Measured on five sentences on Microsoft David, the default
+    // Windows voice, collapsing an authored "..." to a period costs about half
+    // a second of extra pause every time, turning a trailing-off into a firmer
+    // stop than was written. That voice cannot tell "..." from U+2026 at all,
+    // so the gain is from no longer collapsing to a period rather than from the
+    // character; U+2026 is the target because Kokoro has a real token for it
+    // and the system voices are indifferent.
+    out = out.replace(THREE_PERIODS, '…').replace(TWO_PERIODS, '.').replace(REPEATED_BANG, '$1');
+  }
   // Anything the symbols or currency lists speak is not an emoji, whatever
   // Unicode says. ©, ® and ™ are all Extended_Pictographic, so the obvious
   // implementation deleted them — and with them the words "copyright",

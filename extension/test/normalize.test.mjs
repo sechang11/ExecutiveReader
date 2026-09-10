@@ -170,14 +170,36 @@ test('an em dash becomes a comma, attached to the word before it', () => {
   assert.equal(normalize('a—b'), 'a, b');
 });
 
-test('a run of terminators becomes one', () => {
-  assert.equal(normalize('Wait... what?'), 'Wait. what?');
-  assert.equal(normalize('Stop!!!'), 'Stop!');
+test('exactly three periods is an ellipsis, and two is a typo', () => {
+  // Measured on five sentences on Microsoft David, the default Windows voice,
+  // timing the authored form against a collapse to a period: +0.485, +0.445,
+  // +0.495, +0.480, +0.490. Collapsing costs about half a second of extra
+  // pause every time, turning an authored trailing-off into a firmer stop.
+  //
+  // Note what the gain is not: that voice cannot tell "..." from U+2026 at
+  // all. The gain is from no longer collapsing to a period. U+2026 is the
+  // target because Kokoro has a real token for it and the system voices are
+  // indifferent.
+  assert.equal(normalize('Wait... what?'), 'Wait… what?');
+
+  // Two is a typo. Turning it into an ellipsis would be worse than leaving it.
+  assert.equal(normalize('Wait.. what?'), 'Wait. what?');
 });
 
-test('a table-of-contents leader is removed, not turned into a full stop', () => {
-  // dot_leaders has to run before repeated_punctuation, or a leader collapses
-  // to a single period and reads as the end of a sentence.
+test('bang and question runs still collapse to one', () => {
+  assert.equal(normalize('Stop!!!'), 'Stop!');
+  assert.equal(normalize('Really??'), 'Really?');
+});
+
+test('four or more periods never reach the ellipsis rule', () => {
+  // dot_leaders runs first and turns them into a space. If the order were
+  // reversed a table-of-contents leader would become an ellipsis.
+  assert.equal(normalize('Chapter 1......5'), 'Chapter 1 5');
+});
+
+test('a table-of-contents leader is removed, not turned into punctuation', () => {
+  // dot_leaders has to run before repeated_punctuation, or a leader becomes an
+  // ellipsis and reads as a trailing-off in the middle of a contents page.
   assert.equal(normalize('Chapter 1......5'), 'Chapter 1 5');
   assert.equal(normalize('Intro . . . . 7'), 'Intro 7');
 });
@@ -217,7 +239,7 @@ test('the collapse stage is ordered, and the order is part of the contract', () 
   // leader run reaching repeated_punctuation collapses to a single period and
   // then reads as the end of a sentence.
   assert.equal(applyCollapse('Intro......7'), 'Intro 7');
-  assert.equal(applyCollapse('Wait...'), 'Wait.');
+  assert.equal(applyCollapse('Wait...'), 'Wait…');
 
   // And it is the stage, not the pipeline: nothing here expands or pads.
   assert.equal(applyCollapse('w/o'), 'w/o');

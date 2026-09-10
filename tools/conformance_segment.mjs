@@ -139,8 +139,17 @@ const KNOWN = new Map([
   // one block or line at a time in production, which is exactly where a marker
   // sits. This harness hands the extension all three lines as ONE string, a
   // shape it never receives, so only the first marker is at position zero.
+  // `list_markers` has now landed on both sides, and what is left is the
+  // structural difference above wearing a different hat. The rule is anchored
+  // at position zero because both halves segment one block or line at a time in
+  // production, which is exactly where a marker sits. This harness hands the
+  // text to each half as ONE string, so only the first marker is at position
+  // zero for the extension. The desktop splits on newlines first, so all three
+  // markers are at the start of a line and all three are recognised.
+  //
+  // Neither is wrong. The harness is feeding a shape neither half receives.
   ['numbered list', {
-    python: ['1.', 'Preheat the oven.', '2.', 'Butter the tin.', '3.', 'Bake it.'],
+    python: ['1. Preheat the oven.', '2. Butter the tin.', '3. Bake it.'],
     js: ['1. Preheat the oven.', '2.', 'Butter the tin.', '3.', 'Bake it.'],
   }],
 
@@ -154,8 +163,11 @@ const KNOWN = new Map([
   // stage is covered by conformance.mjs, which stops at symbols, currency and
   // expansions. The desktop half collapses a run of periods and reads a link
   // as its domain; the extension does neither.
-  // The extension now implements the shared `collapse` section, so the two
-  // normalizers agree on the text: "Wait... " becomes "Wait. " on both sides.
+  // Two things at once until the Python side lands the ellipsis rule. The
+  // shared rule now says a run of exactly three periods becomes U+2026 rather
+  // than a period, measured: on the default Windows voice, collapsing to a
+  // period adds about half a second of pause to every authored trailing-off.
+  // Only the extension implements that so far, so the text still differs.
   // What is left is narrower, and purely segmentation. A period followed by a
   // LOWERCASE word is not a sentence end in ordinary prose, and the desktop
   // half declines to split there. This half consults that evidence only for
@@ -167,7 +179,7 @@ const KNOWN = new Map([
   // means one rule in both engines, like the ordinal-marker rule.
   ['ellipsis mid sentence', {
     python: ['Wait. what happened?'],
-    js: ['Wait.', 'what happened?'],
+    js: ['Wait…', 'what happened?'],
   }],
   ['url with dots', {
     python: ['Visit link to example.com for more.', 'Then leave.'],
@@ -178,7 +190,7 @@ const KNOWN = new Map([
   // Punctuation with no words in it. The desktop drops it, the extension keeps
   // it and would speak it. Harmless either way, listed so it is not mistaken
   // for a new problem later.
-  ['terminator only', { python: [], js: ['.'] }],
+  ['terminator only', { python: [], js: ['…'] }],
 ]);
 
 const py = process.env.EXECUTIVE_READER_PYTHON

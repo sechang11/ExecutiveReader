@@ -40,6 +40,12 @@ const CASES = [
   'don’t stop', 'it’s “fine” here', 'won­derful', 'won​derful',
   '1914–1918', 'He left — quickly.', 'the cat', 'claimed¹ that',
   'Wait... what?', 'Chapter 1......5', '«bonjour»',
+  // The boundaries of the ellipsis rule, not just its middle. Two periods is
+  // a typo and stays a period; four is a leader and is already a space before
+  // the rule runs. Both survived a mutation of the rule until they were added,
+  // and they are exactly where a second implementation of the same rule text
+  // can land differently.
+  'Wait.. what?', 'Wait.... what?', 'Really??', 'Stop!!!',
   'as Smith showed [1] the result holds',
   // Order-sensitive: these only expand if collapse runs FIRST. An en dash
   // arrow is not '->' until dashes_to_plain has run, and 'et al.' written
@@ -145,30 +151,24 @@ else {
  * something no longer true.
  */
 const KNOWN = new Map([
-  // Bracketed footnote markers, mid-migration.
+  // The ellipsis rule, mid-migration, and the second time this map has held a
+  // half-landed shared change rather than a disagreement. That is what it is
+  // for: the previous pair — bracketed footnote markers — went stale the
+  // moment the desktop half moved its removal into the compared stage, which
+  // is the harness working rather than a gap in it.
   //
-  // The two halves argued this both ways and it was decided by measurement.
-  // On Microsoft David, the default Windows voice, "As shown by Smith [1] the
-  // result holds." runs 3.129s against 2.924s without the marker: an audible
-  // interruption mid-sentence. On Kokoro it is invisible — identical token
-  // count, identical duration — because the model vocabulary has no token for
-  // a bracket or a digit. Removing it is better on one engine and free on the
-  // other, so this half stopped keeping them.
+  // `_collapse_rules.repeated_punctuation` now says a run of exactly three
+  // periods becomes U+2026 rather than a period. Measured on five sentences on
+  // Microsoft David, collapsing to a period costs about half a second of extra
+  // pause every time, turning an authored trailing-off into a firmer stop.
+  // That voice cannot tell "..." from U+2026 at all, so the gain is from no
+  // longer collapsing rather than from the character; U+2026 is the target
+  // because Kokoro has a real token for it and is indifferent either way.
   //
-  // The desktop half has always removed them, but further along its
-  // normalize() than any compared stage reaches, which is why this
-  // disagreement was invisible to tooling while both sides had it written down
-  // and escalated. `_collapse_rules.footnote_markers` now says the rule lives
-  // in the collapse stage, so that something compares it. These two entries
-  // are the gap until that move lands, and they go stale the moment it does.
-  ['collapse :: as Smith showed [1] the result holds', {
-    python: 'as Smith showed [1] the result holds',
-    js: 'as Smith showed  the result holds',
-  }],
-  ['full :: as Smith showed [1] the result holds', {
-    python: 'as Smith showed [1] the result holds',
-    js: 'as Smith showed the result holds',
-  }],
+  // These go stale when the Python side lands, which is one line in its
+  // _SAME_TERMINATOR handling.
+  ['collapse :: Wait... what?', { python: 'Wait. what?', js: 'Wait… what?' }],
+  ['full :: Wait... what?', { python: 'Wait. what?', js: 'Wait… what?' }],
 ]);
 
 const squash = (s) => s.replace(/\s+/g, ' ').trim();
