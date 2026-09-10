@@ -1,6 +1,7 @@
 """Reader state-machine tests. No real audio device is touched."""
 from __future__ import annotations
 
+import collections
 import sys
 import threading
 import time
@@ -191,6 +192,42 @@ def test_sapi_rates_stay_inside_the_range_the_api_accepts():
     assert SapiEngine._rate_for(99.0) == 10
     assert SapiEngine._rate_for(0.001) == -10
 
+
+
+def test_a_straight_read_synthesizes_each_segment_once():
+    """Prefetch must not evict what playback is about to need.
+
+    The eviction window was centred on the segment just rendered rather than on
+    the playhead. The prefetcher works ahead by design, so it discarded the
+    sentence being spoken and the one due next, and both were synthesized again
+    moments later. Nothing sounds wrong. It costs twice the CPU, which on a
+    neural voice is the difference between keeping up and stalling.
+
+    This builds its own Config rather than using make_reader(), which pins
+    prefetch to 2. That is the one depth where the old window happened not to
+    overlap, so the fixture was set to the single value that hid the defect.
+    """
+    cfg = Config()
+    assert cfg.prefetch_segments >= 3, (
+        "shipped prefetch depth dropped to " + str(cfg.prefetch_segments)
+        + "; this test no longer covers the case that regressed")
+    reg, sink = StubRegistry(), StubSink(speed_factor=60.0)
+    reader = Reader(reg, cfg, sink=sink)
+    doc = Document(text=" ".join("Sentence number " + str(i) + " here."
+                                 for i in range(14)),
+                   title="Counting", uri="test://prefetch")
+    done = threading.Event()
+    reader.on_finished = done.set
+    try:
+        total = reader.load(doc)
+        assert done.wait(timeout=40), "playback never finished"
+    finally:
+        reader.shutdown()
+
+    counts = collections.Counter(text for text, _speed in reg.calls)
+    repeated = sorted(t for t, c in counts.items() if c > 1)
+    assert not repeated, (str(len(repeated)) + " of " + str(total)
+                          + " segments were synthesized more than once")
 
 if __name__ == "__main__":
     passed = failed = 0

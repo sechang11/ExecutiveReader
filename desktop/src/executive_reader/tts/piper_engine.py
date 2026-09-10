@@ -72,9 +72,29 @@ class PiperEngine(Engine):
         return (importlib.util.find_spec("onnxruntime") is not None
                 and phonemes.available())
 
+    def custom_voice_ids(self) -> list[str]:
+        """Voices dropped into the folder by hand, including ones you trained.
+
+        A voice you fine-tuned yourself has no catalogue entry, so anything
+        that asks "is a voice installed" by walking CATALOG cannot see it.
+        """
+        folder = voices_dir() / "piper"
+        if not folder.exists():
+            return []
+        return [model.stem for model in sorted(folder.glob("*.onnx"))
+                if model.stem not in CATALOG
+                and self.config_path(model.stem).exists()]
+
     @property
     def available(self) -> bool:
-        return self.library_present and any(self.is_installed(v) for v in CATALOG)
+        # Custom voices count. They were listed by voices() and ignored here,
+        # so a user whose only Piper voice was one they trained saw it in the
+        # picker, selected it, and got Microsoft David: the engine reported
+        # itself unavailable, and resolve() fell through to SAPI without
+        # saying anything. That is the fine-tuning path the README documents.
+        return self.library_present and (
+            any(self.is_installed(v) for v in CATALOG)
+            or bool(self.custom_voice_ids()))
 
     def install(self, voice_id: str, on_progress: ProgressFn | None = None) -> None:
         if voice_id not in CATALOG:
@@ -104,20 +124,20 @@ class PiperEngine(Engine):
                              gender=gender, installed=here,
                              note="" if here else str(size_mb) + " MB download"))
         # Anything dropped into the piper folder by hand, including your own.
-        folder = voices_dir() / "piper"
-        if folder.exists():
-            for model in sorted(folder.glob("*.onnx")):
-                vid = model.stem
-                if vid in CATALOG or not self.config_path(vid).exists():
-                    continue
-                out.append(Voice(id=vid, name=vid + " (custom)", engine=self.name,
-                                 installed=True, note="custom"))
+        for vid in self.custom_voice_ids():
+            out.append(Voice(id=vid, name=vid + " (custom)", engine=self.name,
+                             installed=True, note="custom"))
         return out
 
     def default_voice(self) -> str:
         for vid in CATALOG:
             if self.is_installed(vid):
                 return vid
+        # Same blind spot as available(): prefer a real voice the user has
+        # over a catalogue name they have not downloaded.
+        custom = self.custom_voice_ids()
+        if custom:
+            return custom[0]
         return next(iter(CATALOG))
 
     def _load(self, voice_id: str) -> piper_direct.PiperVoiceModel:

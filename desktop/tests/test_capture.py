@@ -529,6 +529,174 @@ def test_sizes_are_reported_in_units_a_person_reads():
     assert human(330 * 1024 * 1024).startswith("330")
 
 
+
+def _docx_fixture(path):
+    """A document whose tables sit between paragraphs and use both merges."""
+    import docx
+
+    doc = docx.Document()
+    doc.add_paragraph("First paragraph, before the table.")
+
+    table = doc.add_table(rows=4, cols=3)
+    header = table.rows[0].cells
+    header[0].text, header[1].text, header[2].text = "Region", "Q1", "Q2"
+    body = table.rows[1].cells
+    # Two neighbouring cells holding the same value on purpose. A merge check
+    # that compares text instead of identity deletes one of these.
+    body[0].text, body[1].text, body[2].text = "North", "Yes", "Yes"
+
+    # Vertical merge: one label covering the next two rows.
+    down = table.rows[2].cells[0].merge(table.rows[3].cells[0])
+    down.text = "South"
+    table.rows[2].cells[1].text = "No"
+    table.rows[2].cells[2].text = "No"
+    table.rows[3].cells[1].text = "Maybe"
+    table.rows[3].cells[2].text = "Maybe"
+
+    doc.add_paragraph("Second paragraph, after the table.")
+    doc.save(str(path))
+
+
+def test_docx_tables_are_read_where_they_appear():
+    """`document.paragraphs` then `document.tables` moves every table to the end.
+
+    The listener gets a report's page-two table after page fifty, with nothing
+    in the audio to say it moved.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "report.docx"
+        _docx_fixture(path)
+        text = files.read_docx(path).text
+    before = text.index("before the table")
+    table = text.index("Region")
+    after = text.index("after the table")
+    assert before < table < after, text
+
+
+def test_a_merged_docx_cell_is_spoken_once():
+    """`row.cells` returns a merged cell once per column or row it covers.
+
+    A three-column totals row came out as the same phrase three times.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "report.docx"
+        _docx_fixture(path)
+        text = files.read_docx(path).text
+    assert text.count("South") == 1, "vertical merge repeated: " + text
+
+
+def test_a_docx_table_keeps_values_that_genuinely_repeat():
+    """Identity separates a merge from a row that repeats a value.
+
+    Two guards regressed this while it was being written, and both deleted
+    content rather than raising. Comparing cell *text* collapses "Yes, Yes"
+    into one. Comparing id() of an lxml proxy nobody holds a reference to
+    collides with an unrelated cell, because the proxy is freed and CPython
+    reuses the address; that one dropped "North" from the row entirely.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "report.docx"
+        _docx_fixture(path)
+        text = files.read_docx(path).text
+    assert "North, Yes, Yes" in text, text
+    assert "Maybe, Maybe" in text, text
+
+
+def _blank_pdf(pages: int = 3) -> bytes:
+    """A structurally valid PDF whose pages carry no text operators.
+
+    That is what a scan looks like to a parser: real pages, nothing to read.
+    Built here rather than checked in, so the fixture cannot rot into a binary
+    nobody can regenerate or explain.
+    """
+    objs = ["<< /Type /Catalog /Pages 2 0 R >>"]
+    kids = " ".join(str(i + 3) + " 0 R" for i in range(pages))
+    objs.append("<< /Type /Pages /Kids [" + kids + "] /Count " + str(pages) + " >>")
+    for _ in range(pages):
+        objs.append("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>")
+
+    nl = "\n"
+    out = bytearray(("%PDF-1.4" + nl).encode("ascii"))
+    offsets = []
+    for i, body in enumerate(objs, start=1):
+        offsets.append(len(out))
+        out += (str(i) + " 0 obj" + nl + body + nl + "endobj" + nl).encode("ascii")
+    start = len(out)
+    out += ("xref" + nl + "0 " + str(len(objs) + 1) + nl
+            + "0000000000 65535 f " + nl).encode("ascii")
+    for off in offsets:
+        out += (str(off).rjust(10, "0") + " 00000 n " + nl).encode("ascii")
+    out += ("trailer" + nl + "<< /Size " + str(len(objs) + 1) + " /Root 1 0 R >>"
+            + nl + "startxref" + nl + str(start) + nl + "%%EOF" + nl).encode("ascii")
+    return bytes(out)
+
+
+def test_a_scanned_pdf_says_so_instead_of_falling_through_in_silence():
+    """The advice used to be written onto a document that was then discarded.
+
+    `from_file` set `doc.meta["hint"]` and then returned None for having no
+    text, and nothing anywhere read that key. The one sentence that tells a
+    user what to do about a scanned PDF could not be delivered by this path.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "scan.pdf"
+        path.write_bytes(_blank_pdf(3))
+        notes = []
+        assert ladder.from_file(path, notes) is None
+    assert any("scanned" in n for n in notes), notes
+    assert any("OCR" in n for n in notes), notes
+
+
+def test_a_file_that_cannot_be_parsed_is_reported():
+    """Silence here is indistinguishable from a window with no text.
+
+    The ladder then walks past the file to the clipboard and reads whatever the
+    user copied an hour ago, with nothing saying the file was even tried.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "broken.pdf"
+        path.write_bytes(b"not a pdf at all, no header, no objects")
+        notes = []
+        assert ladder.from_file(path, notes) is None
+    assert notes, "a parse failure produced no explanation"
+    assert "broken.pdf" in " ".join(notes), notes
+
+
+def test_the_ladder_reaches_ocr_for_a_scanned_pdf_and_says_why():
+    """End to end: the file rung must decline so the OCR rung can run.
+
+    A scan often carries a few stray characters from a watermark or a form
+    field. Reading those instead of the page is worse than reading nothing,
+    because it looks like success.
+    """
+    from executive_reader.capture import ocr as ocr_mod
+    from executive_reader.capture import uia as uia_mod
+    from executive_reader.document import Document
+
+    saved = (uia_mod.capture_selection, uia_mod.window_info, uia_mod.capture,
+             clipboard.capture, ocr_mod.available, ocr_mod.capture)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "scan.pdf"
+        path.write_bytes(_blank_pdf(2))
+        recognised = Document(text="Recognised from pixels.", title="scan",
+                              uri="test:scan", source="ocr")
+        try:
+            uia_mod.capture_selection = lambda *a, **k: None
+            uia_mod.window_info = lambda *a, **k: uia_mod.WindowInfo(
+                title=str(path), url=str(path))
+            uia_mod.capture = lambda *a, **k: None
+            clipboard.capture = lambda *a, **k: None
+            ocr_mod.available = lambda *a, **k: True
+            ocr_mod.capture = lambda *a, **k: recognised
+            result = ladder.smart()
+        finally:
+            (uia_mod.capture_selection, uia_mod.window_info, uia_mod.capture,
+             clipboard.capture, ocr_mod.available, ocr_mod.capture) = saved
+
+    assert result.rung == "ocr", result.rung
+    assert any("scanned" in n for n in result.notes), result.notes
+
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

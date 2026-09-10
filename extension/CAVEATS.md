@@ -316,3 +316,48 @@ for an 88 MB download and reads "unavailable" will download it again.
 `kokoroEngine.blockedBy()` returns a reason code and a sentence naming the
 actual absence. Any new failure mode here gets its own reason rather than
 joining an existing one.
+
+## 21. A capability check that a real attempt was supposed to replace
+
+`worker.js` tried the WebGPU execution provider first and fell back to
+WebAssembly on failure, deliberately as a real session build rather than a
+feature test. The comment explaining that is still there, and the reasoning is
+still right: drivers advertise support they cannot deliver, and only building a
+session finds out.
+
+What it missed is that failing and stalling are different outcomes. In a browser
+where `navigator.gpu` exists but `requestAdapter()` resolves `null` — a virtual
+machine, or the feature flagged on with no driver behind it — the WebGPU session
+build did not throw. It was still running after eight minutes, with the page
+showing "Starting the engine…" and no error to fall back from.
+
+One adapter request ahead of the loop fixes it, and costs a millisecond. That is
+a capability check, which the comment above it argues against. Both are correct:
+skip the attempt when there is provably nothing to attempt, and make a real
+attempt whenever there might be.
+
+The general shape: **"try it and see" only terminates if failure is prompt.**
+Any fallback ladder that cannot bound how long a rung takes needs a cheap
+precondition in front of it, or the fallback is unreachable.
+
+## 22. The demo was worse than the product it advertised
+
+`site/demo.js` called onnxruntime on the page's own thread while the extension
+had always used a worker. On the WebAssembly path this froze the tab outright:
+not slow, unresponsive, for the whole of session creation and synthesis.
+
+The demo exists to argue for the extension, so a visitor's only measurement of
+the product was of code the product does not run. The header comment claimed the
+extension's modules were reused rather than reimplemented; that was true of the
+phonemizer and the tokenizer, and false of the part that does the work.
+
+The same gap hid a second one. The demo fed the whole passage to the model as a
+single utterance, where the extension segments first. Kokoro's cost grows faster
+than its input, so this was not a small difference: the default demo text had
+not finished after six minutes, and the same text sentence by sentence takes
+about a minute, with the first sentence audible after eleven seconds.
+
+The demo now loads the extension's worker, segmenter and normalizer, copied by
+`tools/sync-shared.mjs` and checked for drift in `standalone.test.mjs` alongside
+the other shared files. Reuse claims are worth only as much of the pipeline as
+they actually cover, and the uncovered part is reliably the expensive one.

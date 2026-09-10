@@ -501,6 +501,52 @@ def test_equal_candidates_tie_at_any_band_width():
     assert found.index == 3, found.index
 
 
+
+def test_context_beats_position_however_far_the_document_moved():
+    """Perfect neighbours must win over a nearer copy with wrong neighbours.
+
+    The distance term used to be subtracted from the score at 0.001 a segment.
+    Context tops out at 2.0, so beyond about 1200 segments of drift the
+    subtraction decided the match on its own. This sweeps well past that point,
+    because the failure was invisible at the small sizes a fixture reaches for.
+    """
+    repeated = "He said nothing at all."
+    before_edit = ["opening line number " + str(i) + "." for i in range(40)]
+    before_edit[9] = "The lamp guttered and went out."
+    before_edit[10] = repeated
+    before_edit[11] = "Rain began against the shutters."
+    anchor = Anchor.create(before_edit, 10)
+
+    for shift in (100, 800, 1200, 3000):
+        real = 10 + shift
+        after = ["filler line number " + str(i) + "." for i in range(real + 200)]
+        after[10] = repeated              # decoy: same words, unrelated neighbours
+        after[real - 1] = "The lamp guttered and went out."
+        after[real] = repeated            # the real one, both neighbours verbatim
+        after[real + 1] = "Rain began against the shutters."
+        found = anchor.locate(after)
+        assert found.index == real, ("shift " + str(shift) + " resolved to "
+                                     + str(found.index) + ", wanted " + str(real))
+
+
+def test_position_still_decides_when_context_cannot():
+    """The tiebreak must survive being demoted to a tiebreak.
+
+    Two copies with equally useless context: the nearer one to the remembered
+    position should still win, which is the whole reason the term exists.
+    """
+    repeated = "He said nothing at all."
+    segments = ["filler line number " + str(i) + "." for i in range(400)]
+    segments[50] = repeated
+    segments[300] = repeated
+
+    near_first = Anchor(exact=repeated, prefix="", suffix="", index_hint=60)
+    assert near_first.locate(segments).index == 50, "should pick the nearer copy"
+
+    near_second = Anchor(exact=repeated, prefix="", suffix="", index_hint=290)
+    assert near_second.locate(segments).index == 300, "should pick the nearer copy"
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

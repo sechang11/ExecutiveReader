@@ -21,10 +21,10 @@ from _paths import REPO_ROOT
 SKIPPED = "SKIP"
 
 
-def _harness() -> Path | None:
+def _harness(name: str = "conformance.mjs") -> Path | None:
     if REPO_ROOT is None:
         return None
-    script = REPO_ROOT / "tools" / "conformance.mjs"
+    script = REPO_ROOT / "tools" / name
     return script if script.is_file() else None
 
 
@@ -74,6 +74,60 @@ def test_python_and_javascript_agree_exactly():
         + " of " + str(comparisons) + "\n" + output)
     assert inputs > 0 and comparisons >= inputs, \
         "the harness compared nothing:\n" + output
+
+
+
+def test_both_halves_resolve_a_bookmark_the_same_way():
+    """The third shared pipeline, and the one that had no guard.
+
+    Text and phonemes were both checked across the two languages. Anchors were
+    not, although docs/anchor-vocabulary.md calls the five labels a contract
+    that neither half may change alone. The first run of that harness found
+    eight disagreements, so the gap was not theoretical.
+
+    Known divergences are enumerated in the harness itself. This asserts only
+    that none is unrecorded and that every case was actually compared.
+    """
+    node = shutil.which("node")
+    script = _harness("conformance_anchor.mjs")
+    if node is None or script is None:
+        print("   (no Node or no harness; skipping)")
+        return SKIPPED
+
+    result = subprocess.run(
+        [node, str(script)], cwd=str(REPO_ROOT), capture_output=True,
+        text=True, encoding="utf-8", errors="replace", timeout=300,
+    )
+    output = (result.stdout or "") + (result.stderr or "")
+    assert result.returncode == 0, "anchor harness failed:" + chr(10) + output
+
+    numbers = {}
+    for line in output.splitlines():
+        for key in ("identical", "known divergence", "unexpected"):
+            if line.strip().startswith(key + ":"):
+                digits = "".join(c for c in line.split(":", 1)[1] if c.isdigit())
+                if digits:
+                    numbers[key] = int(digits)
+
+    header = next((line for line in output.splitlines()
+                   if line.strip().endswith("cases")), "")
+    counts = [int(w) for w in header.split() if w.isdigit()]
+    assert len(counts) == 1, ("could not parse the harness header:"
+                              + chr(10) + output)
+    cases = counts[0]
+
+    assert "unexpected" in numbers, ("could not parse harness output:"
+                                     + chr(10) + output)
+    assert numbers["unexpected"] == 0, (
+        "the two halves disagree in a way nobody recorded:" + chr(10) + output)
+
+    # Every case must land in exactly one bucket. Asserting against the
+    # harness's own total rather than a hand-picked floor means adding cases
+    # cannot silently leave some of them unchecked.
+    seen = numbers.get("identical", 0) + numbers.get("known divergence", 0)
+    assert seen == cases, ("only " + str(seen) + " of " + str(cases)
+                           + " cases were accounted for:" + chr(10) + output)
+    assert cases > 0, "the harness compared nothing:" + chr(10) + output
 
 
 if __name__ == "__main__":

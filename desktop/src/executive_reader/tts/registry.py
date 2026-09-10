@@ -47,18 +47,43 @@ class Registry:
 
         A missing neural model should degrade to a system voice, not stop
         playback, so the app still speaks on a fresh install.
+
+        Whatever comes back must be installed on the engine that comes back
+        with it. Handing over a voice id the engine does not have moves the
+        failure down into synthesis, where it appears part-way through a
+        document rather than as a voice the picker should not have offered.
         """
         eng = self._engines.get(engine)
         if eng is not None and eng.available:
-            known = {v.id for v in eng.voices() if v.installed}
+            known = self._installed(eng)
             if voice in known:
                 return eng, voice
             fallback = eng.default_voice()
-            if fallback in known or not known:
+            # `or not known` was accepted here too, which returned an engine
+            # with nothing downloaded alongside a voice id it did not have.
+            # It stayed harmless only because every engine's `available`
+            # happened to imply an installed voice, which is a fact about
+            # three other modules rather than about this one.
+            if fallback in known:
                 return eng, fallback
         if self.sapi.available:
-            return self.sapi, (voice if engine == "sapi" else self.sapi.default_voice())
+            if voice in self._installed(self.sapi):
+                return self.sapi, voice
+            return self.sapi, self.sapi.default_voice()
         raise EngineError("No usable voice engine is installed.")
+
+    @staticmethod
+    def _installed(eng: Engine) -> set[str]:
+        """Voice ids the engine says it can speak with right now.
+
+        An engine that cannot enumerate must degrade like one with nothing
+        installed. Letting that error escape resolve() turns a recoverable
+        "pick another voice" into no audio at all.
+        """
+        try:
+            return {v.id for v in eng.voices() if v.installed}
+        except EngineError:
+            return set()
 
     def synthesize(self, text: str, engine: str, voice: str,
                    speed: float) -> tuple[np.ndarray, int]:

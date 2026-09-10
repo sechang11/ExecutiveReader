@@ -286,3 +286,85 @@ only route for those, and it reads only what is visible.
 SAPI has integer rate steps and tops out near 3.04x, measured against the real
 engine. The neural voices take speed as a synthesis parameter and keep natural
 pitch to 4x.
+
+## 20. The two halves label the same bookmark differently
+
+Anchors are the third pipeline both halves implement, after text normalisation
+and phonemes. Those two had cross-language harnesses. This one did not, although
+`docs/anchor-vocabulary.md` opens by calling the five labels a contract that
+neither half owns.
+
+`tools/conformance_anchor.mjs` now closes that gap, and its first run found
+eight disagreements out of twenty-three cases.
+
+Every one has the same cause. The desktop half compares sentences with
+whitespace collapsed, case folded and punctuation stripped; the extension
+compares the raw strings. So a sentence that gained a double space, lost its
+capitalisation, or had a straight apostrophe swapped for a curly one is `exact`
+and verified on the desktop and `fuzzy` on the extension.
+
+**What it costs.** All eight agree on *where* the bookmark lands. They disagree
+on what the position is called, and `how` is what decides whether the user is
+told the position is trustworthy. So the same page, bookmarked in both halves,
+tells one user it resumed exactly and the other that it guessed.
+
+**Which half is right.** The desktop, in my view. To a listener there is no
+difference between `The  first point` and `The first point`, so reporting the
+second as an approximation is telling the user something untrue. None of the
+causes is exotic: re-extracting a page, re-exporting a PDF, and rejoining
+hard-wrapped prose all produce exactly these differences.
+
+**Why it is not simply fixed.** The change belongs in
+`extension/src/core/anchor.js`, which is the other session's half, and no test
+on either side covers normalisation here, so this is an oversight on both rather
+than a decision on either. It needs the two halves to agree, which is what the
+vocabulary document exists to force.
+
+The harness records the eight in a `KNOWN` list rather than passing quietly or
+failing forever. An unrecorded disagreement fails; so does a recorded one that
+stops happening, because a list describing behaviour the code no longer has is
+the stale-copy problem from entry 14 wearing a different hat.
+
+One further divergence is deliberate on the extension side and worth knowing
+before anyone "fixes" it: an anchor with no fingerprint at all is unverified
+there and verified here. The extension's reasoning, that absent provenance is
+not the same as unchanged provenance, is sound. It only affects positions saved
+before stamping existed.
+
+## 21. A fixture can be set to the one value that hides the defect
+
+The prefetcher evicted audio using a window centred on the segment it had just
+rendered, rather than on the segment being spoken. Since prefetch runs ahead by
+design, it discarded the sentence playing and the one due next, and both were
+synthesized again moments later. Nothing sounds wrong. It costs twice the CPU,
+which on a neural voice is the difference between keeping up and stalling.
+
+At the shipped prefetch depth of 3, eleven of fourteen segments were rendered
+twice on a straight read. At 4, the worst was rendered three times.
+
+The reader tests set `prefetch_segments = 2`. That is the only depth where the
+old window happens not to overlap, so the suite ran the feature constantly, at
+the single value where the bug is invisible, and passed.
+
+Nothing about the fixture looks wrong. A small number is the natural choice for
+a test, and the shipped default was three lines away in `config.py`. The general
+form is worth watching for: **a fixture that differs from the shipped default is
+testing a configuration nobody runs**, and the difference is usually chosen for
+speed or convenience rather than for coverage. The test added for this asserts
+the shipped default is still what it thinks it is, so lowering the default
+breaks the test rather than silently retiring it.
+
+Two related traps found the same night, both of which delete data rather than
+raise:
+
+- `id()` on an lxml element proxy is not a stable identity. The proxy is built
+  on demand and freed when nothing points at it, and CPython then reuses the
+  address, so an id taken from a transient proxy collides with an unrelated
+  object later. Used to detect merged table cells in a DOCX, this silently
+  dropped a body cell that inherited a header cell's address. Holding a
+  reference for as long as the ids are needed is the fix.
+- A user-facing message written to `doc.meta["hint"]` that nothing ever read.
+  The scanned-PDF advice was set on a document that the same function then
+  discarded for having no text, so the one sentence telling a user what to do
+  about a scan could not be delivered. Grepping for the *reader* of a key, not
+  just the writer, is the check.

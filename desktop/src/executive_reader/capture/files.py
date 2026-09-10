@@ -198,14 +198,71 @@ def read_docx(path) -> Document:
             "python-docx is not installed. Run: pip install python-docx") from exc
     path = Path(path)
     document = docx.Document(str(path))
-    parts = [p.text.strip() for p in document.paragraphs if p.text.strip()]
-    for table in document.tables:
-        for row in table.rows:
-            cells = [c.text.strip() for c in row.cells if c.text.strip()]
-            if cells:
-                parts.append(", ".join(cells))
+    parts = [text for text in _docx_blocks(document) if text]
     return Document(text="\n\n".join(parts), title=path.stem, uri=path.as_uri(),
                     source="file", meta={"path": str(path), "kind": "docx"})
+
+
+def _docx_blocks(document):
+    """Paragraphs and tables in the order they appear on the page.
+
+    `document.paragraphs` and `document.tables` are two separate lists, so
+    reading one then the other moves every table to the end of the document.
+    In a report with a table on page two, the listener hears it after page
+    fifty, with nothing to say it moved. The same mistake in the other
+    direction is why EPUB reading follows the spine rather than the archive.
+
+    The body's own XML children are the only thing that knows the real order.
+    """
+    from docx.oxml.ns import qn
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    for child in document.element.body.iterchildren():
+        if child.tag == qn("w:p"):
+            yield Paragraph(child, document).text.strip()
+        elif child.tag == qn("w:tbl"):
+            for row in _docx_rows(Table(child, document)):
+                yield row
+
+
+def _docx_rows(table):
+    """One line per row, with each merged cell spoken once.
+
+    A cell merged across three columns is returned three times by `row.cells`,
+    once per column it covers, so a totals row came out as "Total for the year,
+    Total for the year, Total for the year". A vertical merge repeats the same
+    way down the rows.
+
+    Every one of those is the same cell and shares one underlying element, so
+    identity separates a merge from a table that genuinely repeats a value in
+    neighbouring columns. Comparing the text would silently collapse that too.
+    """
+    seen: set[int] = set()
+    # `alive` exists only to hold references, and removing it loses table data
+    # silently. lxml builds an element proxy on demand and drops it as soon as
+    # nothing points at it, and CPython then hands the same address to the next
+    # one, so an id() taken from a transient proxy collides with an unrelated
+    # cell a row later. Measured on a three-row table: the body cell "North"
+    # was handed the address of the header cell "Q1" and was skipped as a
+    # duplicate. The failure deletes content rather than raising, and it moves
+    # around with garbage collection, so it is close to unreproducible once it
+    # ships.
+    alive: list = []
+    for row in table.rows:
+        cells = []
+        for cell in row.cells:
+            element = getattr(cell, "_tc", None)
+            if element is not None:
+                if id(element) in seen:
+                    continue
+                seen.add(id(element))
+                alive.append(element)
+            text = cell.text.strip()
+            if text:
+                cells.append(text)
+        if cells:
+            yield ", ".join(cells)
 
 
 def read_text(path) -> Document:

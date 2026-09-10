@@ -48,17 +48,44 @@ def _local_path(url: str) -> Path | None:
     return path if path.exists() and path.is_file() else None
 
 
-def from_file(path) -> Document | None:
+def from_file(path, notes: list[str] | None = None) -> Document | None:
+    """Parse a document, appending to `notes` whenever the answer is no.
+
+    Every rung below this one explains itself when it declines. This one used
+    to decline in silence, so a PDF that failed to parse looked exactly like a
+    window with no text, and the ladder walked past it to the clipboard and
+    read something the user copied an hour ago.
+
+    The scanned-PDF case was worse than silent. The advice was written onto
+    `doc.meta["hint"]` and the document was then dropped for having no text, so
+    the one message that tells a user what to do about a scanned PDF could not
+    be delivered by this path at all. Nothing anywhere read that key.
+    """
     try:
         doc = files.read(path)
-    except files.UnsupportedFile:
+    except files.UnsupportedFile as exc:
+        _note(notes, str(exc))
         return None
-    except Exception:
+    except Exception as exc:
+        _note(notes, "Could not read " + Path(path).name + ": " + str(exc))
         return None
     if doc.meta.get("needs_ocr"):
-        doc.meta["hint"] = ("This PDF has no text layer, so it is probably "
-                            "scanned. Screen OCR is the only way to read it.")
-    return doc if doc.text.strip() else None
+        # Decline rather than read it. A scanned page sometimes carries a
+        # dozen stray characters from a watermark or a form field, which is
+        # enough to look like text and be spoken instead of the page. Falling
+        # through is what the OCR rung is for.
+        _note(notes, "This PDF has no text layer, so it is probably scanned. "
+                     "Screen OCR is the only way to read it.")
+        return None
+    if not doc.text.strip():
+        _note(notes, Path(path).name + " has no readable text.")
+        return None
+    return doc
+
+
+def _note(notes: list[str] | None, message: str) -> None:
+    if notes is not None and message not in notes:
+        notes.append(message)
 
 
 def smart(*, allow_ocr: bool = True, allow_clipboard: bool = True,
@@ -86,7 +113,7 @@ def smart(*, allow_ocr: bool = True, allow_clipboard: bool = True,
         if candidate and _LOCAL_PDF.match(candidate.strip()):
             path = _local_path(candidate)
             if path is not None:
-                doc = from_file(path)
+                doc = from_file(path, notes)
                 if doc is not None:
                     return CaptureResult(doc, "file", notes)
 

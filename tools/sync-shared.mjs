@@ -164,6 +164,11 @@ const SITE_FILES = [
   ['shared/kokoro/vocab.json', 'site/assets/vocab.json'],
   ['extension/src/engines/kokoro/g2p-en.js', 'site/vendor/g2p-en.js'],
   ['extension/src/engines/kokoro/tokenize.js', 'site/vendor/tokenize.js'],
+  ['extension/src/engines/kokoro/worker.js', 'site/vendor/kokoro-worker.js'],
+  ['extension/src/core/segment.js', 'site/vendor/segment.js'],
+  ['extension/src/core/normalize.js', 'site/vendor/normalize.js'],
+  ['shared/abbreviations.json', 'site/assets/abbreviations.json'],
+  ['shared/normalization.json', 'site/assets/normalization.json'],
 ];
 
 for (const { from, to: toDir } of DIRS) {

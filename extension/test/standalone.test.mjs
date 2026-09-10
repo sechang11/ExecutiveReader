@@ -116,6 +116,11 @@ test('the site demo runs the same code and data as the extension', () => {
     ['../shared/kokoro/vocab.json', '../site/assets/vocab.json'],
     ['src/engines/kokoro/g2p-en.js', '../site/vendor/g2p-en.js'],
     ['src/engines/kokoro/tokenize.js', '../site/vendor/tokenize.js'],
+    ['src/engines/kokoro/worker.js', '../site/vendor/kokoro-worker.js'],
+    ['src/core/segment.js', '../site/vendor/segment.js'],
+    ['src/core/normalize.js', '../site/vendor/normalize.js'],
+    ['../shared/abbreviations.json', '../site/assets/abbreviations.json'],
+    ['../shared/normalization.json', '../site/assets/normalization.json'],
   ];
   let compared = 0;
   for (const [canonical, copy] of pairs) {

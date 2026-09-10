@@ -166,17 +166,33 @@ class Anchor:
         return self.locate(segments, rules_changed).index
 
     def _by_context(self, segments: list[str], candidates: list[int]) -> int:
-        """Pick between repeated sentences using the surrounding text."""
+        """Pick between repeated sentences using the surrounding text.
+
+        Context decides. Where context cannot separate two candidates,
+        the one nearer the remembered position wins.
+        """
         want_prefix, want_suffix = _flat(self.prefix), _flat(self.suffix)
-        best_i, best_score = candidates[0], -1.0
+        best_i, best_key = candidates[0], None
         for i in candidates:
             before = _flat(" ".join(segments[max(0, i - 2):i]))[-_CONTEXT:]
             after = _flat(" ".join(segments[i + 1:i + 3]))[:_CONTEXT]
             score = _overlap(want_prefix, before) + _overlap(want_suffix, after)
-            # Nudge towards where it used to be when context ties.
-            score -= abs(i - self.index_hint) * 0.001
-            if score > best_score:
-                best_i, best_score = i, score
+            # Distance is a tiebreak, not a term in the score.
+            #
+            # It was subtracted at 0.001 per segment, which reads like a nudge
+            # and is one in a short document. It scales with the document
+            # though, and context tops out at 2.0, so past about 1200 segments
+            # of drift the penalty outweighed *perfect* context: a bookmark
+            # would leave a copy whose neighbours both matched verbatim and
+            # land on one whose neighbours matched nothing. Drift that large is
+            # ordinary in a long PDF; rejoining hard-wrapped prose alone moves
+            # every index in the 252-page test file by about 740.
+            #
+            # Comparing (score, -distance) restores what the line always said
+            # it did: position decides only where context cannot.
+            key = (score, -abs(i - self.index_hint))
+            if best_key is None or key > best_key:
+                best_i, best_key = i, key
         return best_i
 
     def to_dict(self) -> dict:
