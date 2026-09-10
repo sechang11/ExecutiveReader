@@ -182,10 +182,23 @@ test('a table-of-contents leader is removed, not turned into a full stop', () =>
   assert.equal(normalize('Intro . . . . 7'), 'Intro 7');
 });
 
-test('superscript footnote markers go, bracketed ones stay', () => {
-  // A bracketed marker is indistinguishable from a citation the reader wants.
+test('footnote markers go, superscript and bracketed alike', () => {
+  // Both halves argued the bracketed case, in opposite directions, and it was
+  // settled by measurement rather than taste. On Microsoft David, the default
+  // Windows voice, "As shown by Smith [1] the result holds." runs 3.129s
+  // against 2.924s without it — an audible interruption mid-sentence. On
+  // Kokoro it is invisible: identical token count and identical duration,
+  // because the model vocabulary has no token for a bracket or a digit.
+  // Removing it is better on one engine and free on the other.
   assert.equal(normalize('claimed¹ that'), 'claimed that');
-  assert.equal(normalize('claimed[1] that'), 'claimed[1] that');
+  assert.equal(normalize('claimed [1] that'), 'claimed that');
+  assert.equal(normalize('see [ 12 ] below'), 'see below');
+});
+
+test('a bracketed number that is not a marker survives', () => {
+  // Capped at three digits so an array index is less likely to be caught. This
+  // is a limit, not a solution: "a[12]" still goes.
+  assert.equal(normalize('the array a[1234] holds it'), 'the array a[1234] holds it');
 });
 
 test('emoji are dropped when the rules say skip', () => {
@@ -226,9 +239,16 @@ test('a symbol the rules speak is not an emoji, whatever Unicode says', () => {
   assert.equal(applyCollapse('nice \u{1f389}'), 'nice ');
 });
 
-test('the model can voice an ellipsis, so nothing here throws one away', () => {
-  // U+2026 is in the Kokoro vocabulary. Collapsing it to a period would swap a
-  // trailing-off pause for a full stop and lose what the author wrote, which
-  // is why it is deliberately untouched here.
+test('an ellipsis is left alone, on the numbers rather than the vocabulary', () => {
+  // First argued from the vocabulary: U+2026 has a token, so the model can
+  // voice it. That was weak evidence and the measurements narrow it.
+  //
+  //   Kokoro, tools/voicelab/:  "Wait." 1.800s   "Wait…" 1.850s   "Wait..." 1.800s
+  //   Microsoft David:          "Wait." 2.749s   "Wait…" 2.264s   "Wait..." 2.264s
+  //
+  // So collapsing an ellipsis to a period is worth 0.05s on Kokoro — nothing —
+  // and on the default Windows voice it makes the pause 0.485s LONGER, turning
+  // a trailing-off into a firmer stop than the author wrote. Leaving it alone
+  // is right, but not for the reason first given.
   assert.equal(normalize('Wait… what?'), 'Wait… what?');
 });

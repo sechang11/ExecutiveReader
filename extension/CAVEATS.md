@@ -499,3 +499,38 @@ agreement, not divergence.
 down feels like handling it. `conformance.mjs` now has a `KNOWN` map like the
 other two harnesses, currently empty, with that stale entry's story kept in it —
 because the empty map is the honest record of what is not yet checkable.
+
+## 28. Two implementations reasoning from vocabularies is not evidence
+
+The bracketed footnote marker was argued in both directions for three exchanges.
+This half kept `[1]` because it cannot be told from a reference the reader
+wants. The desktop half removed it because a number injected mid-sentence is an
+interruption. Both positions were reasoned, both were written down, and neither
+was measured.
+
+When it was measured it took minutes and was not close:
+
+| engine | without `[1]` | with `[1]` |
+|---|---|---|
+| Microsoft David (default) | 2.924s | 3.129s |
+| Kokoro | 2.975s | 2.975s |
+
+Audible interruption on one engine, literally invisible on the other. Removing
+it is better in one place and free in the other, and keeping it wins nowhere.
+
+The same exchange produced a second reversal in the other direction. This half
+argued that `…` should be left alone because the model vocabulary contains a
+token for it — so the model "can voice it". Measured, the difference between
+`.` and `…` on Kokoro is 0.05s, which is nothing. The conclusion survived, but
+the reason did not: what actually justifies leaving it alone is that on the
+system voice, collapsing to a period makes the pause *longer* by 0.485s, turning
+a trailing-off into a firmer stop than the author wrote.
+
+**A token being in a vocabulary proves the model was trained with one, not that
+its output differs.** Both halves reached for that inference and both got a
+different answer from measurement.
+
+`tools/voicelab/` exists so the neural half of this question is a page load
+rather than an argument. It synthesizes variants of a sentence and reports the
+audio duration, deliberately skipping `normalize()`, because the point is
+usually to measure what a normalization rule would change.

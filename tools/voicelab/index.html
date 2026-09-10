@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Voice lab — Executive Reader</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; max-width: 60em; }
+  table { border-collapse: collapse; margin-top: 12px; }
+  td, th { text-align: left; padding: 4px 12px; border-bottom: 1px solid #ddd; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<h1>Voice lab</h1>
+<p>
+  Measures how the neural engine actually renders a piece of punctuation, by
+  synthesizing variants of the same sentence and reporting the audio duration.
+  It answers questions that reading the vocabulary file cannot: a token being in
+  the vocabulary proves the model was trained with one, not that the output
+  sounds right.
+</p>
+<p>
+  It deliberately skips <code>normalize()</code>, because the point is usually to
+  measure what a normalization rule would change.
+</p>
+<p><strong>Run:</strong> <code>node tools/serve-repo.mjs</code>, then open
+  <code>http://localhost:8124/tools/voicelab/</code>.</p>
+<div id="status">Loading…</div>
+<table id="out"><thead><tr><th>input</th><th>tokens</th><th>seconds</th><th>vs first</th></tr></thead><tbody></tbody></table>
+<script type="module" src="./run.js"></script>
+</body>
+</html>

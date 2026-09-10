@@ -39,5 +39,20 @@ out = {
     # for the whole of the project. A rule both halves implement separately and
     # nobody compares is a rule that agrees by luck.
     "collapse": [normalize_mod.apply_collapse(c) for c in cases],
+    # The whole pipeline, in the order _output_contract states, rather than one
+    # stage at a time. Stages compared in isolation both passed while the
+    # trademark sign was being destroyed between them: NFKC decomposed U+2122
+    # into the letters T and M before the symbols stage saw it, so the rule
+    # never fired. A stage compared in isolation is not the pipeline.
+    #
+    # Composed here rather than calling normalize(), which also strips markdown,
+    # table-of-contents leaders and bullets. Those have no counterpart in the
+    # extension, which reads a DOM where the structure is already elements, so
+    # comparing them would report a difference in job as a difference in
+    # behaviour.
+    "full": [
+        symbols.apply(normalize_mod.apply_expansions(normalize_mod.apply_collapse(c)))
+        for c in cases
+    ],
 }
 json.dump(out, sys.stdout)

@@ -59,6 +59,9 @@ const PLAIN_DASHES = /[‒–―]/g;
  *  with the comma floating away from the word it belongs to. */
 const EM_DASH = /[ \t]*—[ \t]*/g;
 const SUPERSCRIPT_DIGITS = /[¹²³⁰-⁹]/g;
+/** A bracketed footnote marker. Three digits at most, so an array index or a
+ *  bracketed year is less likely to be caught. */
+const BRACKETED_MARKER = /\[\s*\d{1,3}\s*\]/g;
 /** Four or more periods, optionally spaced: a table-of-contents leader. */
 const DOT_LEADER = /(?:\.[ \t]*){4,}/g;
 const REPEATED_TERMINATOR = /([.!?])\1+/g;
@@ -77,7 +80,9 @@ export function applyCollapse(text) {
   // Not cleanup. The engines have no phoneme for a dash and drop it in
   // silence, so the pause the author wrote disappears; a comma restores it.
   if (COLLAPSE.em_dash_to_comma) out = out.replace(EM_DASH, ', ');
-  if (COLLAPSE.footnote_markers) out = out.replace(SUPERSCRIPT_DIGITS, '');
+  if (COLLAPSE.footnote_markers) {
+    out = out.replace(SUPERSCRIPT_DIGITS, '').replace(BRACKETED_MARKER, '');
+  }
   // Before repeated_punctuation, which would otherwise turn a leader into a
   // single period and make it look like the end of a sentence.
   if (COLLAPSE.dot_leaders) out = out.replace(DOT_LEADER, ' ');

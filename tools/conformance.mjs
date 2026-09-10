@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  loadNormalization, applySymbols, applyCurrency, applyExpansions, applyCollapse,
+  loadNormalization, normalize, applySymbols, applyCurrency, applyExpansions, applyCollapse,
 } from '../extension/src/core/normalize.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,6 +41,12 @@ const CASES = [
   '1914–1918', 'He left — quickly.', 'the cat', 'claimed¹ that',
   'Wait... what?', 'Chapter 1......5', '«bonjour»',
   'as Smith showed [1] the result holds',
+  // Order-sensitive: these only expand if collapse runs FIRST. An en dash
+  // arrow is not '->' until dashes_to_plain has run, and 'et al.' written
+  // with a non-breaking space is not 'et al.' until nbsp_to_space has. The
+  // contract states the order and nothing tested it: swapping the two stages
+  // in the extension passed the whole corpus.
+  'a –> b', 'et al. showed it', '“w/o” it',
   // survival: these must come through untouched
   'R&D', 'C++', 'x && y', 'key=value', 'a==b', 'C#', '#hashtag', '## Heading',
   'me@example.com', '@someone', '~/home/user', '%s and %d', 'x += 1',
@@ -88,6 +94,7 @@ const jsOut = {
   symbols: CASES.map(applySymbols),
   both: CASES.map((c) => applySymbols(applyCurrency(c))),
   collapse: CASES.map(applyCollapse),
+  full: CASES.map(normalize),
 };
 
 /** Stages are compared individually, not just end to end. A disagreement can
@@ -114,6 +121,10 @@ const STAGES = ['expansions', 'currency', 'symbols', 'both'];
  * failure this harness exists to prevent.
  */
 if (pyOut.collapse) STAGES.push('collapse');
+// The whole pipeline, not one stage at a time. Both halves passed every
+// isolated stage while the trademark sign was being destroyed between two of
+// them on the desktop side. A stage compared in isolation is not the pipeline.
+if (pyOut.full) STAGES.push('full');
 else {
   console.log('note: the collapse stage is not compared; conformance_py.py does '
     + 'not expose one yet. See _collapse_rules in shared/normalization.json.');
@@ -134,21 +145,30 @@ else {
  * something no longer true.
  */
 const KNOWN = new Map([
-  // Empty, and worth keeping rather than deleting.
+  // Bracketed footnote markers, mid-migration.
   //
-  // It was added for the bracketed-footnote disagreement — the desktop half
-  // removes "[1]", this half keeps it — and the entry was immediately stale,
-  // because at THIS stage the two halves agree. The desktop's removal happens
-  // further along its normalize(), past everything any harness compares. So a
-  // disagreement both sides had written down and escalated was invisible to
-  // every check we have, which is the same shape as the gap that started all
-  // of this.
+  // The two halves argued this both ways and it was decided by measurement.
+  // On Microsoft David, the default Windows voice, "As shown by Smith [1] the
+  // result holds." runs 3.129s against 2.924s without the marker: an audible
+  // interruption mid-sentence. On Kokoro it is invisible — identical token
+  // count, identical duration — because the model vocabulary has no token for
+  // a bracket or a digit. Removing it is better on one engine and free on the
+  // other, so this half stopped keeping them.
   //
-  // The corpus keeps the case, so the agreement at this stage is asserted
-  // rather than assumed. The disagreement itself needs a stage that compares
-  // the full pipeline, and that is blocked on the two normalize() functions
-  // having genuinely different jobs: the desktop's also strips markdown, table
-  // of contents leaders and bullets, which have no counterpart here.
+  // The desktop half has always removed them, but further along its
+  // normalize() than any compared stage reaches, which is why this
+  // disagreement was invisible to tooling while both sides had it written down
+  // and escalated. `_collapse_rules.footnote_markers` now says the rule lives
+  // in the collapse stage, so that something compares it. These two entries
+  // are the gap until that move lands, and they go stale the moment it does.
+  ['collapse :: as Smith showed [1] the result holds', {
+    python: 'as Smith showed [1] the result holds',
+    js: 'as Smith showed  the result holds',
+  }],
+  ['full :: as Smith showed [1] the result holds', {
+    python: 'as Smith showed [1] the result holds',
+    js: 'as Smith showed the result holds',
+  }],
 ]);
 
 const squash = (s) => s.replace(/\s+/g, ' ').trim();
