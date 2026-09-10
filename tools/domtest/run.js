@@ -19,6 +19,7 @@ import {
 import {
   findNext, watchForGrowth, loadRules, needsConfirmation,
 } from '../../extension/src/content/pagination.js';
+import * as highlight from '../../extension/src/content/highlight.js';
 
 const results = document.getElementById('results');
 const stage = document.getElementById('stage');
@@ -467,6 +468,138 @@ await test(
     await new Promise((r) => setTimeout(r, 200));
 
     equal(seen.length, 0, 'a watcher that outlives its page keeps re-extracting it');
+  },
+);
+
+// ------------------------------------------------------------- highlight
+
+/** What the highlight registry holds right now, as plain strings. */
+const painted = (name) => [...(CSS.highlights.get(name) ?? [])].map((r) => r.toString());
+const SENTENCE = 'executive-reader-sentence';
+const WORD = 'executive-reader-word';
+
+await test(
+  'the API this whole approach depends on is present',
+  '',
+  () => {
+    // If this ever fails, the differentiator is gone and the side panel is the
+    // product rather than the fallback. Worth knowing loudly.
+    assert(highlight.supported, 'CSS.highlights is unavailable in this browser');
+  },
+);
+
+await test(
+  'highlighting mutates nothing in the document',
+  // The entire argument for this approach. Every competitor wraps spoken text
+  // in injected spans, which reflows the page and fights the site's framework.
+  '<p>Hello there, friend</p>',
+  (root) => {
+    const before = root.innerHTML;
+    const [block] = extractBlocks(root);
+
+    highlight.setSentence(rangeFor(block, 0, 19));
+    highlight.setWord(rangeFor(block, 6, 11));
+
+    equal(root.innerHTML, before, 'the DOM changed; the page was modified');
+    highlight.clear();
+  },
+);
+
+await test(
+  'the sentence and the word are painted where they were asked for',
+  '<p>Hello there, friend</p>',
+  (root) => {
+    const [block] = extractBlocks(root);
+
+    highlight.setSentence(rangeFor(block, 0, 19));
+    highlight.setWord(rangeFor(block, 6, 11));
+
+    deepEqual(painted(SENTENCE), ['Hello there, friend']);
+    deepEqual(painted(WORD), ['there']);
+    highlight.clear();
+  },
+);
+
+await test(
+  'a new sentence clears the previous word, not just the previous sentence',
+  // Otherwise the word from the last sentence stays lit while the next one is
+  // read, which reads as the highlight having fallen behind the voice.
+  '<p>First sentence here.</p><p>Second sentence here.</p>',
+  (root) => {
+    const [first, second] = extractBlocks(root);
+
+    highlight.setSentence(rangeFor(first, 0, first.text.length));
+    highlight.setWord(rangeFor(first, 0, 5));
+    highlight.setSentence(rangeFor(second, 0, second.text.length));
+
+    deepEqual(painted(WORD), []);
+    deepEqual(painted(SENTENCE), ['Second sentence here.']);
+    highlight.clear();
+  },
+);
+
+await test(
+  'only one word is lit at a time',
+  '<p>Hello there, friend</p>',
+  (root) => {
+    const [block] = extractBlocks(root);
+    highlight.setSentence(rangeFor(block, 0, 19));
+
+    highlight.setWord(rangeFor(block, 0, 5));
+    highlight.setWord(rangeFor(block, 6, 11));
+
+    deepEqual(painted(WORD), ['there'], 'the previous word stayed lit');
+    highlight.clear();
+  },
+);
+
+await test(
+  'passing null clears rather than throwing',
+  '<p>Hello there, friend</p>',
+  (root) => {
+    // rangeFor returns null when the page changed under us, and that value
+    // arrives here directly.
+    const [block] = extractBlocks(root);
+    highlight.setSentence(rangeFor(block, 0, 19));
+
+    highlight.setWord(null);
+    highlight.setSentence(null);
+
+    deepEqual(painted(SENTENCE), []);
+    deepEqual(painted(WORD), []);
+  },
+);
+
+await test(
+  'the word highlight is registered after the sentence, so it paints on top',
+  '<p>Hello there, friend</p>',
+  (root) => {
+    const [block] = extractBlocks(root);
+    highlight.setSentence(rangeFor(block, 0, 19));
+
+    const names = [...CSS.highlights.keys()];
+    assert(names.indexOf(WORD) > names.indexOf(SENTENCE),
+      'the API resolves overlaps by registration order, not z-index');
+    highlight.clear();
+  },
+);
+
+await test(
+  'destroying removes the registrations entirely',
+  '<p>Hello there, friend</p>',
+  (root) => {
+    const [block] = extractBlocks(root);
+    highlight.setSentence(rangeFor(block, 0, 19));
+
+    highlight.destroy();
+
+    equal(CSS.highlights.get(SENTENCE), undefined);
+    equal(CSS.highlights.get(WORD), undefined);
+
+    // And it must still work afterwards, or a second page never highlights.
+    highlight.setSentence(rangeFor(block, 0, 5));
+    deepEqual(painted(SENTENCE), ['Hello']);
+    highlight.clear();
   },
 );
 

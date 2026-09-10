@@ -61,7 +61,7 @@ const KNOWN_UNREACHED = {
   'src/background/offscreen-host.js': 'chrome.offscreen lifecycle',
   'src/content/index.js': 'live DOM, ranges and chrome messaging',
   'src/content/loader.js': 'four lines of dynamic import into a page context',
-  'src/content/highlight.js': 'CSS Custom Highlight API, which has no Node equivalent',
+  'src/content/highlight.js': 'CSS Custom Highlight API, which has no Node equivalent; covered by tools/domtest/',
   'src/content/scroll.js': 'scroll position and wheel events',
   // kokoro/index.js is deliberately absent: a test now imports it to check the
   // engine's declared sample rate and speed ceiling. Reachable is not the same
