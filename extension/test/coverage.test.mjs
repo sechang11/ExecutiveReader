@@ -67,8 +67,8 @@ const KNOWN_UNREACHED = {
   // engine's declared sample rate and speed ceiling. Reachable is not the same
   // as exercised — almost none of its behaviour is covered — but this list
   // tracks reachability, and KNOWN_UNEXERCISED below is the finer measure.
-  // model-store.js is absent for the same reason: reached transitively through
-  // kokoro/index.js. Nothing exercises its Cache API or streamed fetch.
+  // model-store.js is absent because test/model-store.test.mjs now drives it
+  // directly, against a fake CacheStorage and a fetch that streams in chunks.
   // worker.js IS tested — test/worker.test.mjs drives its whole message
   // protocol against a fake ONNX Runtime — but this scan cannot see it. The
   // test imports it through a computed URL, because the module installs
