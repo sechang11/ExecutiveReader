@@ -133,10 +133,16 @@ instead:
 node tools/serve-repo.mjs
 ```
 
-Then open <http://localhost:8124/tools/domtest/>. It reports in the page. This
-is not yet wired into CI, and it is worth running: on its first run it found
-that a "Next" link pointing at the current page was followed, which re-reads the
-same page forever.
+Then open <http://localhost:8124/tools/domtest/>. It reports in the page. To run
+the same suite headlessly, which is what CI does:
+
+```powershell
+node tools/run-domtests.mjs
+```
+
+It drives the Chrome already on the machine and exits non-zero on failure. On
+its first run it found that a "Next" link pointing at the current page was
+followed, which re-reads the same page forever.
 
 ### Working now
 

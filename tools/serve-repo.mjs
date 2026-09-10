@@ -20,6 +20,10 @@ const TYPES = {
   '.css': 'text/css', '.json': 'application/json',
 };
 
+// Overridable so tools/run-domtests.mjs can start its own instance without
+// colliding with one a person left running.
+const PORT = Number(process.env.PORT) || 8124;
+
 createServer(async (req, res) => {
   const requested = decodeURIComponent(req.url.split('?')[0]);
   const rel = requested.endsWith('/') ? `${requested}index.html` : requested;
@@ -32,4 +36,4 @@ createServer(async (req, res) => {
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('not found');
   }
-}).listen(8124, () => console.log('repo on http://localhost:8124'));
+}).listen(PORT, () => console.log(`repo on http://localhost:${PORT}`));

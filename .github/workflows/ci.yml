@@ -30,6 +30,16 @@ jobs:
         run: npm test
         working-directory: extension
 
+      # The content scripts need a real document — a TreeWalker over live
+      # elements, computed styles, Ranges, a mutation observer — so their tests
+      # run in the runner's own Chrome rather than in Node. It found a real
+      # defect the first time it ran, which is the argument for having it here
+      # rather than as something a person remembers to open.
+      - name: DOM tests
+        run: node tools/run-domtests.mjs
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+
       # shared/*.json is copied into the extension and the site rather than
       # referenced, because neither can read files outside its own directory at
       # runtime. A copy's failure mode is that it stops being made and nothing
