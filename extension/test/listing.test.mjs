@@ -43,7 +43,7 @@ test('broad host access stays optional in both the manifest and the listing', ()
 });
 
 test('the extension name matches the listing', () => {
-  const named = listing.match(/```\n(Earmark[^\n]*)\n```/);
+  const named = listing.match(/```\n(Executive Reader[^\n]*)\n```/);
   assert.ok(named, 'the listing must state the name in a code block');
   assert.equal(named[1].trim(), manifest.name);
 });

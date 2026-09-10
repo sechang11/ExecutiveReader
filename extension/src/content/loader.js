@@ -13,11 +13,11 @@
  */
 
 (() => {
-  if (window.__earmarkLoaded) return;
-  window.__earmarkLoaded = true;
+  if (window.__executiveReaderLoaded) return;
+  window.__executiveReaderLoaded = true;
 
   import(chrome.runtime.getURL('src/content/index.js')).catch((err) => {
-    window.__earmarkLoaded = false;
-    console.error('[earmark] failed to load reader', err);
+    window.__executiveReaderLoaded = false;
+    console.error('[executive-reader] failed to load reader', err);
   });
 })();

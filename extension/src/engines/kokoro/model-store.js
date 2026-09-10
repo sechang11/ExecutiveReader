@@ -12,6 +12,15 @@
  * eviction under storage pressure is a re-download rather than data loss.
  */
 
+/**
+ * Deliberately still the old product name. **Do not rename this.**
+ *
+ * It is the Cache API key holding the 88 MB voice model. Renaming it orphans a
+ * download the user already waited for and silently starts another, which reads
+ * as the extension re-downloading for no reason.
+ *
+ * Same rule as the history database: storage identifiers are not branding.
+ */
 const CACHE = 'earmark-kokoro-v1';
 
 const HOST = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main';

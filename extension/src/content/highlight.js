@@ -14,8 +14,8 @@
  * bordered box.
  */
 
-const SENTENCE = 'earmark-sentence';
-const WORD = 'earmark-word';
+const SENTENCE = 'executive-reader-sentence';
+const WORD = 'executive-reader-word';
 
 export const supported = typeof CSS !== 'undefined' && 'highlights' in CSS;
 

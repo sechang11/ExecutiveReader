@@ -1,4 +1,4 @@
-# Earmark
+# Executive Reader
 
 Text read aloud in natural voices that run on your own machine. Two products
 sharing one philosophy: nothing you read is sent to a server.

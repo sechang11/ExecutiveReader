@@ -67,7 +67,7 @@ in one file and switched on in another. Nothing type-checks any of these, and a
 mismatch produces **silence, not an error**: highlighting stops painting, or the
 keep-alive dies with an empty console.
 
-Renaming anything means grepping both sides. The rename to Earmark had nine
+Renaming anything means grepping both sides. The rename to Executive Reader had nine
 embedded occurrences, three of which would have failed silently.
 
 ## 7. Chrome's PDF viewer is closed to us

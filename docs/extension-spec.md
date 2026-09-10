@@ -1,4 +1,4 @@
-# Earmark for Chrome — architecture spec
+# Executive Reader for Chrome — architecture spec
 
 Status: v1.0, all questions closed. Ready to build.
 
@@ -16,13 +16,13 @@ extension's high-end voice engine.
 | Content scope | Articles, PDFs, and webmail in v1. Google Docs deliberately excluded |
 | Audience | Accessibility and productivity both, with accessible defaults out of the box |
 | Desktop bridge | Interface designed for it now, built after launch |
-| Product name | **Earmark** |
+| Product name | **Executive Reader** |
 
-**Why Earmark.** The working name was Aloud, which could not ship: the incumbent
+**Why Executive Reader.** The working name was Aloud, which could not ship: the incumbent
 we measure against in section 1 is called Read Aloud, one word away. That is a
 discoverability problem more than a legal one. A Web Store search for "read
 aloud" returns the incumbent with its install count and review history, and a
-near-identically-named newcomer ranks underneath it. Earmark competes on its own
+near-identically-named newcomer ranks underneath it. Executive Reader competes on its own
 terms in search instead, and the ear-plus-bookmark reading names the two things
 the product actually does.
 
@@ -187,7 +187,7 @@ doable. The CSS Custom Highlight API, available since Chrome 105, paints ranges
 without touching the DOM:
 
 ```js
-CSS.highlights.set('earmark-sentence', new Highlight(...ranges));
+CSS.highlights.set('executive-reader-sentence', new Highlight(...ranges));
 ```
 
 No injected spans means nothing breaks in React, Vue, or any site whose CSS
@@ -344,7 +344,7 @@ switch from Read Aloud: natural voices, free, offline, no text leaving the
 machine.
 
 **Tier 2, the desktop companion — designed for now, built after launch.** If the
-Earmark desktop app is installed, the extension discovers it over Chrome native
+Executive Reader desktop app is installed, the extension discovers it over Chrome native
 messaging and hands off synthesis. The desktop side runs Chatterbox or Higgs
 Audio on the GPU and streams audio back: ElevenLabs-class voices, free, private,
 fully offline, no per-character cost to anyone. Nothing in the Chrome Web Store

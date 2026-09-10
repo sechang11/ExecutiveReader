@@ -284,7 +284,7 @@ async function startReading(tabId, opts = {}) {
     title: doc.title,
   });
 
-  runLoop().catch((e) => console.error('[earmark] read loop failed', e));
+  runLoop().catch((e) => console.error('[executive-reader] read loop failed', e));
 }
 
 /**
@@ -333,7 +333,7 @@ async function runLoop() {
           volume: state.volume,
         });
       } catch (e) {
-        console.warn('[earmark] neural sentence failed, skipping', e);
+        console.warn('[executive-reader] neural sentence failed, skipping', e);
       }
       if (currentAbort.signal.aborted) return;
       const afterNeural = await getState();
@@ -385,7 +385,7 @@ async function runLoop() {
         }
       }
     } catch (e) {
-      console.warn('[earmark] sentence failed, skipping', e);
+      console.warn('[executive-reader] sentence failed, skipping', e);
     }
 
     if (currentAbort.signal.aborted) return; // a skip or stop already moved us
@@ -479,7 +479,7 @@ chrome.commands.onCommand.addListener((command) => {
       if (tab?.id) await startReading(tab.id, { selectionOnly: true });
     },
   }[command];
-  run?.().catch((e) => console.error('[earmark] command failed', command, e));
+  run?.().catch((e) => console.error('[executive-reader] command failed', command, e));
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, respond) => {
@@ -662,7 +662,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 
 // The session port exists purely to hold the worker open while reading.
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== 'earmark-session') return;
+  if (port.name !== 'executive-reader-session') return;
   port.onDisconnect.addListener(async () => {
     const state = await getState();
     // The page went away underneath us; do not keep speaking into nothing.
@@ -672,7 +672,7 @@ chrome.runtime.onConnect.addListener((port) => {
 
 chrome.runtime.onInstalled.addListener((details) => {
   chrome.contextMenus.create({
-    id: 'earmark-read-selection',
+    id: 'executive-reader-read-selection',
     // "aloud" here is the English word, not the old product name. A blanket
     // rename turned this into "Read this earmark" and shipped it as the only
     // wording a user sees before installing anything else.
@@ -689,7 +689,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === 'earmark-read-selection' && tab?.id) {
-    startReading(tab.id, { selectionOnly: true }).catch((e) => console.error('[earmark]', e));
+  if (info.menuItemId === 'executive-reader-read-selection' && tab?.id) {
+    startReading(tab.id, { selectionOnly: true }).catch((e) => console.error('[executive-reader]', e));
   }
 });

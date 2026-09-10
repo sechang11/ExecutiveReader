@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Earmark — Natural Text to Speech Reader",
+  "name": "Executive Reader — Natural Text to Speech",
   "version": "0.1.0",
   "description": "Reads web pages aloud in natural voices that run on your own machine. Free, offline, and private.",
   "minimum_chrome_version": "116",
@@ -9,7 +9,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Earmark — read this page",
+    "default_title": "Executive Reader — read this page",
     "default_popup": "src/popup/popup.html"
   },
   "side_panel": {

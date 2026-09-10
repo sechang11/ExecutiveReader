@@ -95,7 +95,7 @@ $('open-panel').addEventListener('click', () => {
     .then(() => window.close()) // else the popup covers what it just opened
     .catch((e) => {
       $('status').textContent = 'Could not open the panel.';
-      console.error('[earmark]', e);
+      console.error('[executive-reader]', e);
     });
 });
 

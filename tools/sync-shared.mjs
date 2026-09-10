@@ -149,6 +149,23 @@ const DIRS = [
   { from: 'kokoro', to: join(root, 'extension', 'vendor', 'kokoro') },
 ];
 
+/**
+ * Individual files the site needs, copied rather than referenced.
+ *
+ * GitHub Pages serves only what is committed, so the demo cannot reach up into
+ * `shared/` or `extension/` at runtime. Making these derived rather than
+ * hand-copied is the same reasoning as everywhere else: a third copy of the
+ * dictionary that drifts would have the demo pronouncing words differently from
+ * the product it is advertising, which is worse than not having a demo.
+ */
+const SITE_FILES = [
+  ['shared/cmudict/cmudict.txt.gz', 'site/assets/cmudict.txt.gz'],
+  ['shared/cmudict/homographs.json', 'site/assets/homographs.json'],
+  ['shared/kokoro/vocab.json', 'site/assets/vocab.json'],
+  ['extension/src/engines/kokoro/g2p-en.js', 'site/vendor/g2p-en.js'],
+  ['extension/src/engines/kokoro/tokenize.js', 'site/vendor/tokenize.js'],
+];
+
 for (const { from, to: toDir } of DIRS) {
   const fromDir = join(src, from);
   if (!existsSync(fromDir)) {
@@ -179,3 +196,15 @@ for (const { from, to: toDir } of DIRS) {
   }
   console.log(`synced ${from}/ -> ${toDir} (${copied} files)`);
 }
+
+for (const [from, to] of SITE_FILES) {
+  const src_ = join(root, from);
+  const dest_ = join(root, to);
+  if (!existsSync(src_)) {
+    console.error(`missing ${from}`);
+    process.exit(1);
+  }
+  mkdirSync(dirname(dest_), { recursive: true });
+  copyFileSync(src_, dest_);
+}
+console.log(`synced ${SITE_FILES.length} files into site/`);

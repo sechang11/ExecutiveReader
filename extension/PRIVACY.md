@@ -1,11 +1,11 @@
-# Earmark privacy policy
+# Executive Reader privacy policy
 
 Last updated: 9 September 2026
 
-Earmark reads web pages aloud. This policy describes every case where data
+Executive Reader reads web pages aloud. This policy describes every case where data
 leaves your device, and there are only two.
 
-## What Earmark stores, and where
+## What Executive Reader stores, and where
 
 All of it stays in your browser's own storage on this computer. None of it is
 transmitted anywhere.
@@ -35,12 +35,12 @@ under their privacy policy, not this one.
 These voices are labelled **"needs a connection"** in the voice list. Voices
 without that label run entirely on your device.
 
-The natural voices Earmark downloads run entirely on your device and send
+The natural voices Executive Reader downloads run entirely on your device and send
 nothing, ever.
 
 ### 2. Downloading the voice model
 
-If you turn on natural voices, Earmark downloads a voice model, roughly 88 MB,
+If you turn on natural voices, Executive Reader downloads a voice model, roughly 88 MB,
 plus about 510 KB for each voice you use. These come from Hugging Face.
 
 That download tells Hugging Face your network address and that you requested
@@ -48,13 +48,13 @@ those files, in the same way visiting any website does. It contains nothing
 about you, nothing about what you read, and it happens once. If you never turn
 on natural voices, it never happens at all.
 
-## What Earmark never does
+## What Executive Reader never does
 
 - **No analytics, telemetry, or usage tracking.** None. There is no server to
   send it to.
 - **No account.** There is nothing to sign in to.
 - **No advertising, and no data sold or shared** with anyone.
-- **No reading of pages you have not asked it to read.** Earmark only looks at a
+- **No reading of pages you have not asked it to read.** Executive Reader only looks at a
   page when you press play, use a shortcut, or choose "Read this aloud".
 
 ## Permissions
@@ -73,7 +73,7 @@ Chrome shows a list of permissions at install. What each is actually for:
 
 ## Children
 
-Earmark is not directed at children and collects no personal information from
+Executive Reader is not directed at children and collects no personal information from
 anyone, of any age.
 
 ## Changes

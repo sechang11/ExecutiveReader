@@ -177,15 +177,15 @@ export const kokoroEngine = {
         if (misses.length) {
           // Not an error. Worth seeing while tuning the dictionary, since these
           // are exactly the words a listener will notice.
-          console.debug('[earmark] not in dictionary:', misses.join(', '));
+          console.debug('[executive-reader] not in dictionary:', misses.join(', '));
         }
 
         const { ids, dropped, truncated } = tokenize(ipa);
         if (dropped.length) {
-          console.warn('[earmark] phonemes outside the model alphabet:', dropped.join(''));
+          console.warn('[executive-reader] phonemes outside the model alphabet:', dropped.join(''));
         }
         if (!ids.length) return;
-        if (truncated) console.warn('[earmark] sentence exceeded the model token limit');
+        if (truncated) console.warn('[executive-reader] sentence exceeded the model token limit');
 
         const pack = voicePacks.get(opts.voice.nativeId);
         const style = styleFrame(pack.floats, styleIndex(ids.length, pack.frames));

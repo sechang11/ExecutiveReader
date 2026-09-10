@@ -215,7 +215,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
 // An open port keeps the service worker from being suspended mid-sentence.
 // Without this, Chrome tears the worker down after roughly thirty seconds idle
 // and playback stops between sentences. See spec section 2.
-const port = chrome.runtime.connect({ name: 'earmark-session' });
+const port = chrome.runtime.connect({ name: 'executive-reader-session' });
 port.onDisconnect.addListener(teardown);
 
 scroller = startScrollFollow();

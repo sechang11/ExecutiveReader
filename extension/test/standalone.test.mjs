@@ -105,3 +105,26 @@ test('the homograph table holds real alternates', () => {
     assert.notDeepEqual(table[w].noun, table[w].verb, `${w} readings must differ`);
   }
 });
+
+test('the site demo runs the same code and data as the extension', () => {
+  // The demo exists to prove voice quality, so a drifted copy would advertise
+  // a pronunciation the product does not have. Derived by tools/sync-shared.mjs
+  // rather than hand-copied, and checked here so the derivation cannot lapse.
+  const pairs = [
+    ['../shared/cmudict/cmudict.txt.gz', '../site/assets/cmudict.txt.gz'],
+    ['../shared/cmudict/homographs.json', '../site/assets/homographs.json'],
+    ['../shared/kokoro/vocab.json', '../site/assets/vocab.json'],
+    ['src/engines/kokoro/g2p-en.js', '../site/vendor/g2p-en.js'],
+    ['src/engines/kokoro/tokenize.js', '../site/vendor/tokenize.js'],
+  ];
+  let compared = 0;
+  for (const [canonical, copy] of pairs) {
+    const a = path.join(extRoot, canonical);
+    const b = path.join(extRoot, copy);
+    assert.ok(existsSync(b), `${copy} is missing; run tools/sync-shared.mjs`);
+    assert.deepEqual(readFileSync(b), readFileSync(a),
+      `${copy} has drifted from ${canonical}; re-run tools/sync-shared.mjs`);
+    compared++;
+  }
+  assert.equal(compared, pairs.length);
+});

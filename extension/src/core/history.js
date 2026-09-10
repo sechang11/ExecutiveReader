@@ -14,6 +14,18 @@
  * line reported success. See the renaming table near the top of the spec.
  */
 
+/**
+ * Deliberately still the old product name. **Do not rename this.**
+ *
+ * It is the IndexedDB database name, so changing it does not migrate anything —
+ * it opens a different, empty database and every saved reading position becomes
+ * unreachable. Nothing reports that: the extension simply starts with no
+ * history and looks like it is working.
+ *
+ * A branding change is not a reason to make someone's data disappear. If this
+ * ever must move, it needs a migration that opens the old name, copies, and
+ * only then deletes.
+ */
 const DB_NAME = 'earmark-history';
 const DB_VERSION = 1;
 const STORE_BODIES = 'bodies';

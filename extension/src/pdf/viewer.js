@@ -17,13 +17,13 @@ function fail(message, detail) {
   $('meta').textContent = '';
   $('error').textContent = message;
   $('error').hidden = false;
-  if (detail) console.error('[earmark]', detail);
+  if (detail) console.error('[executive-reader]', detail);
 }
 
 async function run() {
   if (!source) return fail('No PDF was given to open.');
 
-  document.title = 'Earmark PDF';
+  document.title = 'Executive Reader PDF';
   $('meta').textContent = 'Reading the document…';
 
   let doc;
@@ -48,7 +48,7 @@ async function run() {
   }
 
   $('title').textContent = doc.title;
-  document.title = `${doc.title} — Earmark`;
+  document.title = `${doc.title} — Executive Reader`;
 
   const frag = document.createDocumentFragment();
   for (const page of doc.pages) {

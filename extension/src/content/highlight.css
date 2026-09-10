@@ -13,29 +13,29 @@
  */
 
 :root {
-  --earmark-sentence-bg: rgba(255, 214, 102, 0.42);
-  --earmark-word-bg: rgba(255, 167, 38, 0.85);
-  --earmark-word-fg: #1a1a1a;
+  --executive-reader-sentence-bg: rgba(255, 214, 102, 0.42);
+  --executive-reader-word-bg: rgba(255, 167, 38, 0.85);
+  --executive-reader-word-fg: #1a1a1a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --earmark-sentence-bg: rgba(96, 132, 255, 0.34);
-    --earmark-word-bg: rgba(122, 162, 255, 0.9);
-    --earmark-word-fg: #06101f;
+    --executive-reader-sentence-bg: rgba(96, 132, 255, 0.34);
+    --executive-reader-word-bg: rgba(122, 162, 255, 0.9);
+    --executive-reader-word-fg: #06101f;
   }
 }
 
-::highlight(earmark-sentence) {
-  background-color: var(--earmark-sentence-bg);
+::highlight(executive-reader-sentence) {
+  background-color: var(--executive-reader-sentence-bg);
 }
 
 /* The active word carries an underline as well as a wash, so the cue does not
  * depend on colour alone. That is a hard requirement, not a nicety: it is what
  * makes the reader usable for colour-blind users. */
-::highlight(earmark-word) {
-  background-color: var(--earmark-word-bg);
-  color: var(--earmark-word-fg);
+::highlight(executive-reader-word) {
+  background-color: var(--executive-reader-word-bg);
+  color: var(--executive-reader-word-fg);
   text-decoration: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 2px;

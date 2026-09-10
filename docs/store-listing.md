@@ -9,10 +9,10 @@ justifications match what the code actually does.
 ## Name
 
 ```
-Earmark — Natural Text to Speech Reader
+Executive Reader — Natural Text to Speech
 ```
 
-45 characters visible in search results. "Earmark" carries the brand; the rest
+45 characters visible in search results. "Executive Reader" carries the brand; the rest
 carries the search terms people actually type. Deliberately not "Read Aloud"
 adjacent: the incumbent owns that phrase, and a near-identical name ranks
 beneath it while inviting confusion.
@@ -28,12 +28,12 @@ Reads pages aloud in natural voices that run on your own device. Free, offline, 
 ## Detailed description
 
 ```
-Earmark reads web pages, PDFs and email aloud, in voices that run on your own
+Executive Reader reads web pages, PDFs and email aloud, in voices that run on your own
 computer.
 
 NATURAL VOICES, WITHOUT A SUBSCRIPTION
 Most readers give you robotic voices for free and charge monthly for good ones,
-because the good ones run on someone else's servers. Earmark runs a neural voice
+because the good ones run on someone else's servers. Executive Reader runs a neural voice
 model on your machine instead. It is free, it works offline, and the text never
 leaves your computer.
 
@@ -78,7 +78,7 @@ positioning and the more accurate one, and the defaults were chosen for it.
 The store requires one sentence describing a single purpose.
 
 ```
-Earmark converts the text of web pages, PDFs and email into speech, and reads it
+Executive Reader converts the text of web pages, PDFs and email into speech, and reads it
 aloud to the user.
 ```
 
@@ -118,7 +118,7 @@ The form asks what user data is collected. The honest answers:
 | Health information | No |
 | Financial information | No |
 | Authentication information | No |
-| Personal communications | **Yes** — Earmark can read email aloud when the user asks it to. The text is processed on the device and never transmitted. |
+| Personal communications | **Yes** — Executive Reader can read email aloud when the user asks it to. The text is processed on the device and never transmitted. |
 | Location | No |
 | Web history | **Yes** — pages the user has chosen to have read aloud are stored locally so reading can resume. Never transmitted. |
 | User activity | No |
@@ -137,7 +137,7 @@ submitting. The store requires a URL, not a file.
 - [ ] Replace the placeholder icons in `extension/assets/` with real artwork
 - [ ] Screenshots: 1280×800 or 640×400, at least one, at most five
 - [ ] Host the privacy policy and put its URL in the listing
-- [ ] Verify the trademark and domain for "Earmark" are clear
+- [ ] Verify the trademark and domain for "Executive Reader" are clear
 - [ ] Run `node tools/sync-shared.mjs`, then confirm `node --test extension/test/` is green
 - [ ] Load the packed zip unpacked once, from a clean profile, and read a page end to end
 

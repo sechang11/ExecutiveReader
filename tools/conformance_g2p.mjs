@@ -39,7 +39,7 @@ const CASES = [
   'a tear rolled down', 'to tear it up', 'take a bow', 'bow the head',
   // Out of dictionary: proper nouns, coinages, product names.
   'Anthropic', 'Kubernetes', 'Xiaomi', 'nginx', 'PostgreSQL',
-  'Earmark', 'Kokoro', 'phonemizer', 'blorptastic',
+  'Executive Reader', 'Kokoro', 'phonemizer', 'blorptastic',
   // Letter-to-sound digraphs, longest-first ordering.
   'nation', 'vision', 'tough', 'laughter', 'watch', 'bridge', 'night',
   'running', 'quick', 'knowledge', 'through',

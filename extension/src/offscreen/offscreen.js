@@ -35,7 +35,7 @@ const neuralReady = (async () => {
   useG2P(g2pEn);
 })().catch((e) => {
   // System voices still work without this; the neural tier simply stays absent.
-  console.error('[earmark] neural voices unavailable', e);
+  console.error('[executive-reader] neural voices unavailable', e);
 });
 
 const player = new Player({

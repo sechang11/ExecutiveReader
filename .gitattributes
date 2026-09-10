@@ -1,0 +1,14 @@
+# Normalise line endings so a checkout on another platform does not show every
+# file as modified. The desktop half is Python on Windows and the extension is
+# JavaScript; without this, a Mac or Linux contributor's first diff is the whole
+# repository.
+* text=auto eol=lf
+
+# Binaries must never be touched. A line-ending conversion applied to a wasm
+# module or a gzip corrupts it silently — it stays the right size and stops
+# working.
+*.wasm binary
+*.gz binary
+*.png binary
+*.onnx binary
+*.bin binary

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Executive Reader — natural text to speech that runs on your own machine</title>
+<meta name="description" content="Reads web pages, PDFs and email aloud in natural voices that run on your own computer. Free, offline, and nothing you read leaves your device.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+  <h1>Reads anything aloud.<br><span>Nothing leaves your computer.</span></h1>
+  <p class="lede">
+    Natural voices that run on your own machine, so they are free, they work
+    offline, and the text you read is never sent anywhere.
+  </p>
+  <p class="cta">
+    <a class="button" id="install" href="#demo">Hear it first</a>
+    <a class="quiet" href="#how">How it works</a>
+  </p>
+  <p class="note">Free. No account. No analytics.</p>
+</header>
+
+<!--
+  The demo is the whole argument. Voice quality is what a reader is judged on
+  and nobody believes a claim about it, so this plays the real model rather than
+  a recording. It is opt-in because it costs an 88 MB download, and asking
+  before spending someone's bandwidth on a page they are merely browsing is the
+  same courtesy the extension itself applies.
+-->
+<section id="demo" class="demo">
+  <h2>Hear the actual voice</h2>
+  <p>
+    This runs the same model the extension uses, in this tab, on your machine.
+    Nothing you type is sent to a server.
+  </p>
+
+  <label for="demo-text" class="visually-hidden">Text to read aloud</label>
+  <textarea id="demo-text" rows="4" spellcheck="false">The quick brown fox jumped over the lazy dog. Executive Reader runs this voice on your own computer, so it costs nothing and works offline.</textarea>
+
+  <div class="demo-controls">
+    <button id="demo-play" class="button" type="button">Download voice and play</button>
+    <label class="speed">
+      Speed <output id="demo-speed-out">1.0&times;</output>
+      <input id="demo-speed" type="range" min="0.5" max="3" step="0.1" value="1">
+    </label>
+  </div>
+
+  <p class="note" id="demo-note">
+    First play downloads about 88&nbsp;MB of voice model. It is cached
+    afterwards, and this page never downloads anything until you press the
+    button.
+  </p>
+
+  <div id="demo-progress" hidden>
+    <progress id="demo-bar" max="100" value="0"></progress>
+    <p class="note" id="demo-status" role="status" aria-live="polite"></p>
+  </div>
+
+  <noscript><p class="note">The demo needs JavaScript. The extension itself does not need this page at all.</p></noscript>
+</section>
+
+<section id="how">
+  <h2>What it does that others do not</h2>
+
+  <div class="grid">
+    <article>
+      <h3>Natural voices, no subscription</h3>
+      <p>
+        Most readers give you robotic voices free and charge monthly for good
+        ones, because the good ones run on someone else's servers. This runs a
+        neural model on your machine instead.
+      </p>
+    </article>
+
+    <article>
+      <h3>Highlights the real page</h3>
+      <p>
+        The sentence being read lights up in place, on the actual page, along
+        with the word being spoken. Nothing is rewritten or re-laid-out, so
+        sites keep working normally while you listen.
+      </p>
+    </article>
+
+    <article>
+      <h3>Remembers where you stopped</h3>
+      <p>
+        Come back a week later and it resumes at the right sentence, even if the
+        page has been edited since. It matches on the text, not a position.
+      </p>
+    </article>
+
+    <article>
+      <h3>Keeps going</h3>
+      <p>
+        Follows the page as it scrolls, notices when more content loads, and can
+        continue onto the next page of an article. Half speed to four times,
+        applied when the voice is generated so it never sounds like a chipmunk.
+      </p>
+    </article>
+
+    <article>
+      <h3>PDFs and email too</h3>
+      <p>
+        PDFs open in a built-in reader that recovers the text in the right
+        order, even in two-column papers. Gmail and Outlook are read as
+        messages rather than as application clutter, with quoted replies
+        skipped.
+      </p>
+    </article>
+
+    <article>
+      <h3>Built to be usable</h3>
+      <p>
+        Full keyboard control, adjustable size, spacing and typeface, and
+        highlight colours you can change. The spoken word is underlined as well
+        as coloured, so the cue never depends on colour vision.
+      </p>
+    </article>
+  </div>
+</section>
+
+<section class="privacy">
+  <h2>Private because of how it is built, not because we promise</h2>
+  <p>
+    There is no server to send anything to. No account, no analytics, no
+    tracking. Your reading history stays in your browser and you can delete it
+    at any time.
+  </p>
+  <p>
+    Two things do touch the network, and both are described plainly in the
+    <a href="privacy.html">privacy policy</a>: voices your browser marks
+    &ldquo;needs a connection&rdquo;, which are processed by whoever provides
+    them, and the one-time voice model download.
+  </p>
+</section>
+
+<footer>
+  <p>
+    <a href="privacy.html">Privacy</a> ·
+    <a href="https://github.com/sechang11/ExecutiveReader">Source</a> ·
+    <a href="https://github.com/sechang11/ExecutiveReader/issues">Report a problem</a>
+  </p>
+  <p class="note">
+    Voices from Kokoro-82M under Apache 2.0. Pronunciation from CMUdict. PDF
+    text via PDF.js. Nothing bundled is copyleft-licensed.
+  </p>
+</footer>
+
+<script type="module" src="demo.js"></script>
+</body>
+</html>
