@@ -8,7 +8,7 @@ extension/   Chrome extension — reads web pages, PDFs, and webmail
 desktop/     Windows reader — reads any window, any file, and Claude Code sessions
 shared/      Rule data both halves consume, so they never drift apart
 docs/        Specs
-tools/       Small scripts: sync shared data, draw placeholder icons
+tools/       Small scripts: sync shared data, draw icons, build the privacy page
 ```
 
 Each half has its own README. Start there:
@@ -92,12 +92,17 @@ an output contract requiring both sides to collapse spaces the same way.
 
 ## Running the extension
 
-No build step. The two scripts below only copy files and draw placeholder icons,
-so what a store reviewer reads is what actually runs.
+No build step. The scripts below only copy files, draw icons and render one
+markdown file, so what a store reviewer reads is what actually runs.
 
 ```powershell
-node tools/sync-shared.mjs; node tools/make-icons.mjs
+node tools/sync-shared.mjs; node tools/make-icons.mjs; node tools/build-privacy.mjs
 ```
+
+`build-privacy.mjs` renders `site/privacy.html` from `extension/PRIVACY.md`. The
+store listing points at the published page while the extension ships the
+markdown, and the published one is what people can hold the project to, so it is
+generated rather than kept in step by hand.
 
 Then open `chrome://extensions`, turn on Developer mode, choose **Load
 unpacked**, and pick the `extension` folder. Open any article and press Alt+P.
@@ -109,12 +114,16 @@ unpacked**, and pick the `extension` folder. Open any article and press Alt+P.
 | Previous or next sentence | Alt+Left / Alt+Right |
 | Read from a paragraph | Alt+click it |
 
-Tests cover the two pieces worth pinning down, sentence segmentation and offset
-mapping:
-
 ```powershell
 node --test extension/test/
 ```
+
+Sentence segmentation and offset mapping are the pieces worth pinning
+down hardest, but the suite also covers the anchor ladder, the phonemizer, PDF
+layout, the inference worker's fallback path, licence compliance across every
+vendored byte, and whether the shipped copies of shared data have drifted from
+their originals. GitHub Actions runs it, and re-runs both generators to check
+neither has lapsed.
 
 ### Working now
 
@@ -165,7 +174,8 @@ decision to make.
 
 ### Not yet
 
-Real icon artwork and screenshots, and a hosted URL for the privacy policy.
+Designed icon artwork — the current mark is drawn by a script — screenshots
+from the real surfaces, and a hosted URL for the privacy policy.
 Submission copy is written in [`docs/store-listing.md`](docs/store-listing.md).
 
 ### What is vendored, and why
