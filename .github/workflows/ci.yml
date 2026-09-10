@@ -1,0 +1,40 @@
+# Continuous integration for the Chrome extension half.
+#
+# The desktop half is deliberately not built here. Its tests need PySide6,
+# pywin32 and a Windows runner, and it is developed in its own session; a red
+# badge caused by this file would be a cost paid by someone who did not choose
+# it. When that half wants CI it should add its own job, which it is better
+# placed to keep green.
+name: extension
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No install step: the extension has no dependencies and no build. What a
+      # store reviewer reads is what runs, and keeping CI dependency-free is
+      # part of how that stays true.
+      - name: Test
+        run: npm test
+        working-directory: extension
+
+      # shared/*.json is copied into the extension and the site rather than
+      # referenced, because neither can read files outside its own directory at
+      # runtime. A copy's failure mode is that it stops being made and nothing
+      # notices, so re-running the sync must produce no diff.
+      - name: Shared data is in sync
+        run: |
+          node tools/sync-shared.mjs
+          git diff --exit-code
