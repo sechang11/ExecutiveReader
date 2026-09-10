@@ -43,7 +43,7 @@ your TensorFlow, matplotlib, numba and ultralytics installs require numpy 1.
 Start it in the tray:
 
 ```powershell
-C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\desktop\executive-reader.cmd
+desktop/executive-reader.cmd
 ```
 
 Use `executive-reader-console.cmd` instead if you want to see errors in a window.
@@ -51,7 +51,7 @@ Use `executive-reader-console.cmd` instead if you want to see errors in a window
 Read something without the tray:
 
 ```powershell
-C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\desktop\executive-reader-console.cmd --file "C:\path\to\book.pdf"
+desktop/executive-reader-console.cmd --file "C:\path\to\book.pdf"
 ```
 
 ## Chrome needs one flag
@@ -197,7 +197,7 @@ is missing. The extension needs its own copy because a Chrome extension can
 only load files inside its own folder, so after editing anything in `shared/`:
 
 ```powershell
-node C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\tools\sync-shared.mjs
+node tools/sync-shared.mjs
 ```
 
 A test fails if the two copies drift.
@@ -231,7 +231,7 @@ Sitting alongside, outside this folder: `extension/` is the Chrome extension,
 ## Tests
 
 ```powershell
-C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\desktop\.venv\Scripts\python.exe C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\desktop\tests\test_reader.py
+desktop/.venv/Scripts/python.exe desktop/tests/test_reader.py
 ```
 
 One of them runs tools/conformance.mjs, which feeds the same inputs through

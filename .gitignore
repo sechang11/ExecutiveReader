@@ -7,3 +7,6 @@ dist/
 extension/assets/models/
 *.onnx
 .DS_Store
+
+# Crash dumps from tooling, occasionally left behind on Windows.
+*.stackdump

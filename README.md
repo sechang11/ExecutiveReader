@@ -69,7 +69,7 @@ A Chrome extension can only load files inside its own folder, so after editing
 anything in `shared/`:
 
 ```powershell
-node C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\tools\sync-shared.mjs
+node tools/sync-shared.mjs
 ```
 
 A test on the desktop side fails if the two copies drift.
@@ -81,7 +81,7 @@ read it the same way. Two people implementing one spec in two languages will
 diverge on whatever the spec left implicit.
 
 ```powershell
-node C:\Users\Kashix\Documents\CS\Projects\ChromeReaderExtension\tools\conformance.mjs
+node tools/conformance.mjs
 ```
 
 It runs the same inputs through the Python and JavaScript normalizers and
