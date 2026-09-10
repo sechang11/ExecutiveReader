@@ -69,7 +69,15 @@ const KNOWN_UNREACHED = {
   // tracks reachability, and KNOWN_UNEXERCISED below is the finer measure.
   // model-store.js is absent for the same reason: reached transitively through
   // kokoro/index.js. Nothing exercises its Cache API or streamed fetch.
-  'src/engines/kokoro/worker.js': 'runs inside a Worker, loads ONNX Runtime',
+  // worker.js IS tested — test/worker.test.mjs drives its whole message
+  // protocol against a fake ONNX Runtime — but this scan cannot see it. The
+  // test imports it through a computed URL, because the module installs
+  // self.onmessage at load time and must be loaded fresh per case, and the
+  // scan only resolves literal specifiers. Left listed rather than removed,
+  // with the truth written down: a list that says "unreachable" where the
+  // answer is "unresolvable by this scan" is the kind of true-sounding claim
+  // CAVEATS section 19 is about.
+  'src/engines/kokoro/worker.js': 'covered by test/worker.test.mjs; imported through a computed URL this scan cannot follow',
   'src/engines/system.js': 'chrome.tts',
   'src/offscreen/offscreen.js': 'message wiring between the worker and the audio graph',
   'src/options/options.js': 'settings page DOM',
