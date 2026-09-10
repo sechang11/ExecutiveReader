@@ -78,7 +78,7 @@ const KNOWN_UNREACHED = {
   // answer is "unresolvable by this scan" is the kind of true-sounding claim
   // CAVEATS section 19 is about.
   'src/engines/kokoro/worker.js': 'covered by test/worker.test.mjs; imported through a computed URL this scan cannot follow',
-  'src/engines/system.js': 'chrome.tts',
+
   'src/offscreen/offscreen.js': 'message wiring between the worker and the audio graph',
   'src/options/options.js': 'settings page DOM',
   'src/pdf/extract.js': 'drives PDF.js against a real document',
