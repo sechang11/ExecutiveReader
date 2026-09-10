@@ -120,10 +120,23 @@ node --test extension/test/
 
 Sentence segmentation and offset mapping are the pieces worth pinning
 down hardest, but the suite also covers the anchor ladder, the phonemizer, PDF
-layout, the inference worker's fallback path, licence compliance across every
-vendored byte, and whether the shipped copies of shared data have drifted from
-their originals. GitHub Actions runs it, and re-runs both generators to check
-neither has lapsed.
+layout, the inference worker's fallback path, the voice model cache, the system
+voice engine, licence compliance across every vendored byte, and whether the
+shipped copies of shared data have drifted from their originals. GitHub Actions
+runs it, and re-runs both generators to check neither has lapsed.
+
+The content scripts need a real document — a TreeWalker over live elements,
+computed styles, Ranges, a mutation observer — so their tests run in a browser
+instead:
+
+```powershell
+node tools/serve-repo.mjs
+```
+
+Then open <http://localhost:8124/tools/domtest/>. It reports in the page. This
+is not yet wired into CI, and it is worth running: on its first run it found
+that a "Next" link pointing at the current page was followed, which re-reads the
+same page forever.
 
 ### Working now
 

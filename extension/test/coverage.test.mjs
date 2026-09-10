@@ -158,7 +158,7 @@ function exercised(module) {
 }
 
 /**
- * Exports that no test exercises, and why.
+ * Exports this Node suite does not exercise, and why.
  *
  * Every one of these needs a live DOM: a TreeWalker over real elements, ranges
  * with real client rects, computed styles, a mutation observer. Faking that
@@ -166,9 +166,14 @@ function exercised(module) {
  * half-faithful fake would assert against a DOM that does not behave like the
  * one in Chrome.
  *
- * This is the honest position, not a comfortable one. `extract.js` and
- * `pagination.js` hold the code most likely to break on a real page, and it is
- * checked by using the extension rather than by this suite.
+ * They are covered instead by `tools/domtest/`, which runs the same exports in
+ * a browser against real elements — see the README. That suite found a real
+ * defect on its first run, so the previous version of this comment, which said
+ * these were checked only by using the extension, was describing a gap rather
+ * than a decision.
+ *
+ * This list therefore means "not exercised by `node --test`", which is what the
+ * scan below can actually see. Both suites have to be run.
  */
 const KNOWN_UNEXERCISED = {
   'src/content/extract.js': ['findArticleRoot', 'extractBlocks', 'extractBySite', 'rangeFor'],

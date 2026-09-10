@@ -361,3 +361,23 @@ The demo now loads the extension's worker, segmenter and normalizer, copied by
 `tools/sync-shared.mjs` and checked for drift in `standalone.test.mjs` alongside
 the other shared files. Reuse claims are worth only as much of the pipeline as
 they actually cover, and the uncovered part is reliably the expensive one.
+
+## 23. A guard in one branch of a ladder is not a guard
+
+`findNext` tries strategies in order: `rel=next`, then aria labels, then class
+names, then link text, then incrementing a number in the URL. The first branch
+rejected a link pointing at the page we are already on, with a comment saying
+so. The text branch, two rules later, did not.
+
+So a page with `<a href="/current-page">Next</a>` was rejected by the strategy
+that checks and accepted by the one that does not, and following it re-reads the
+same page — forever, with auto-continue on. The guard was present, correct, and
+in the wrong place, which is why reading the file does not find it: the branch
+you happen to read has the check in it.
+
+Found by `tools/domtest/`, on its first run, because a fallback ladder is only
+testable against a document and nothing had ever run one against it.
+
+**A precondition that applies to every branch belongs above the loop.** It is
+now one predicate used by all three, which is also the shape that makes the next
+strategy inherit it for free.

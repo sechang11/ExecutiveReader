@@ -81,13 +81,25 @@ export function findNext(doc = document) {
   const overrides = RULES.sites?.[host];
   const strategies = overrides?.strategies ?? RULES.strategies ?? [];
 
+  const here = doc.location?.href ?? location.href;
+  /**
+   * A link to the page we are already on is not a next page.
+   *
+   * This guard used to live only in the selector branch, so a plain "Next"
+   * link pointing at the current page was rejected by `rel=next` and then
+   * accepted by the text strategy two rules later — and following it re-reads
+   * the same page, forever. Comparing without the fragment as well, because
+   * `#comments` is the same document.
+   */
+  const isHere = (url) => url.split('#')[0] === here.split('#')[0];
+
   for (const s of strategies) {
     if (s.selector) {
       for (const el of doc.querySelectorAll(s.selector)) {
         const href = el.getAttribute('href');
         if (!href || !visible(el)) continue;
-        const url = new URL(href, doc.location?.href ?? location.href).toString();
-        if (url === (doc.location?.href ?? '')) continue; // points at itself
+        const url = new URL(href, here).toString();
+        if (isHere(url)) continue;
         return {
           url,
           label: (el.textContent || el.getAttribute('aria-label') || 'Next').trim().slice(0, 60),
@@ -105,14 +117,15 @@ export function findNext(doc = document) {
         if (!text || text.length > 30) continue;
         if (!s.textMatch.some((w) => text === w || text.startsWith(`${w} `) || text.endsWith(` ${w}`))) continue;
         if (!visible(a)) continue;
-        const url = new URL(a.getAttribute('href'), doc.location?.href ?? location.href).toString();
+        const url = new URL(a.getAttribute('href'), here).toString();
+        if (isHere(url)) continue;
         return { url, label: text.slice(0, 60), strategy: s.id, confidence: s.confidence ?? 'low' };
       }
     }
 
     if (s.pattern) {
-      const url = incrementUrl(doc.location?.href ?? location.href, s.pattern);
-      if (url) return { url, label: 'Next page', strategy: s.id, confidence: s.confidence ?? 'low' };
+      const url = incrementUrl(here, s.pattern);
+      if (url && !isHere(url)) return { url, label: 'Next page', strategy: s.id, confidence: s.confidence ?? 'low' };
     }
   }
 

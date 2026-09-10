@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DOM tests — Executive Reader</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; max-width: 60em; }
+  #summary { font-weight: 600; margin: 16px 0; }
+  li { margin: 2px 0; }
+  .pass { color: #1a7f37; }
+  .fail { color: #b42318; }
+  .fail pre { background: #fff4f3; padding: 8px; overflow-x: auto; }
+  #stage { position: absolute; left: -10000px; top: 0; width: 800px; }
+</style>
+</head>
+<body>
+<h1>DOM tests</h1>
+<p>
+  These cover the parts of the content scripts that need a real document: a
+  TreeWalker over live elements, computed styles, and Ranges. Node cannot run
+  them, and a fake DOM convincing enough to be worth trusting would be a larger
+  project than the code under test, so they run here instead and are reported to
+  whoever opened this page.
+</p>
+<p><strong>Run:</strong> <code>node tools/serve-repo.mjs</code>, then open
+  <code>http://localhost:8124/tools/domtest/</code>.</p>
+
+<div id="summary">Running…</div>
+<ul id="results"></ul>
+
+<!-- Fixtures are built into this element by each test and torn down after. -->
+<div id="stage"></div>
+
+<script type="module" src="./run.js"></script>
+</body>
+</html>
