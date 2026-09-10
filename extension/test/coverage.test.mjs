@@ -62,7 +62,7 @@ const KNOWN_UNREACHED = {
   'src/content/index.js': 'live DOM, ranges and chrome messaging',
   'src/content/loader.js': 'four lines of dynamic import into a page context',
   'src/content/highlight.js': 'CSS Custom Highlight API, which has no Node equivalent; covered by tools/domtest/',
-  'src/content/scroll.js': 'scroll position and wheel events',
+  'src/content/scroll.js': 'scroll position and wheel events; covered by tools/domtest/',
   // kokoro/index.js is deliberately absent: a test now imports it to check the
   // engine's declared sample rate and speed ceiling. Reachable is not the same
   // as exercised — almost none of its behaviour is covered — but this list

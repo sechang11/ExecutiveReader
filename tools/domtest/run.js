@@ -20,6 +20,7 @@ import {
   findNext, watchForGrowth, loadRules, needsConfirmation,
 } from '../../extension/src/content/pagination.js';
 import * as highlight from '../../extension/src/content/highlight.js';
+import { startScrollFollow } from '../../extension/src/content/scroll.js';
 
 const results = document.getElementById('results');
 const stage = document.getElementById('stage');
@@ -601,6 +602,167 @@ await test(
     deepEqual(painted(SENTENCE), ['Hello']);
     highlight.clear();
   },
+);
+
+// ---------------------------------------------------------- scroll follow
+
+/** The viewport height the scroll tests assume. */
+const VH = 800;
+
+/**
+ * Run a body with window.scrollTo recorded rather than performed.
+ *
+ * Actually scrolling would move every later fixture out from under its own
+ * assertions, and the question here is what the module decides, not whether the
+ * browser can scroll. `matchMedia` is overridable so the reduced-motion branch
+ * can be reached deliberately.
+ */
+async function withScrollStub({ reduceMotion = false } = {}, fn) {
+  const realScrollTo = window.scrollTo;
+  const realMatchMedia = window.matchMedia;
+  const realHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+  const calls = [];
+  // A fixed viewport height, so the band arithmetic is checked against a known
+  // number rather than whatever this window happens to be. It also lets these
+  // run in a hidden or zero-height pane, where innerHeight is 0 and every
+  // comparison against a fraction of it is NaN.
+  Object.defineProperty(window, 'innerHeight', { value: VH, configurable: true });
+  window.scrollTo = (opts) => calls.push(opts);
+  window.matchMedia = (q) => (q.includes('reduced-motion')
+    ? { matches: reduceMotion, addEventListener() {}, removeEventListener() {} }
+    : realMatchMedia.call(window, q));
+  try {
+    return await fn(calls);
+  } finally {
+    window.scrollTo = realScrollTo;
+    window.matchMedia = realMatchMedia;
+    if (realHeight) Object.defineProperty(window, 'innerHeight', realHeight);
+    else delete window.innerHeight;
+  }
+}
+
+
+/** A fixture with a target pushed a known distance down the viewport. */
+const atOffset = (px) => `<div style="height:${px}px"></div><p id="target">Hello there, friend</p>`;
+
+await test(
+  'a sentence already comfortably on screen is left alone',
+  // The band is a quarter to seven tenths of the viewport. Anything inside it
+  // is where a reader wants it, and moving the page would be gratuitous.
+  atOffset(Math.round(VH * 0.35)),
+  (root) => withScrollStub({}, (calls) => {
+    const follower = startScrollFollow();
+    const [block] = extractBlocks(root.querySelector('#target').parentElement);
+    follower.follow(rangeFor(block, 0, 19));
+    deepEqual(calls, [], 'the page was scrolled for no reason');
+  }),
+);
+
+await test(
+  'a sentence below the band is brought up into it',
+  atOffset(Math.round(VH * 0.9)),
+  (root) => withScrollStub({}, (calls) => {
+    const follower = startScrollFollow();
+    const [block] = extractBlocks(root.querySelector('#target').parentElement);
+    const range = rangeFor(block, 0, 19);
+    const before = range.getBoundingClientRect().top;
+
+    follower.follow(range);
+
+    equal(calls.length, 1, 'the sentence was left off screen');
+    equal(calls[0].behavior, 'smooth');
+    // The target puts the sentence at the top of the band, not at the top of
+    // the window: a sentence pinned to the very top has no context above it.
+    const expected = window.scrollY + before - VH * 0.25;
+    assert(Math.abs(calls[0].top - expected) < 1, `${calls[0].top} vs ${expected}`);
+  }),
+);
+
+await test(
+  'a reader who scrolls is not yanked back',
+  // The defect every auto-scrolling reader has: you scroll up to re-read a
+  // line and the page pulls you forward again.
+  atOffset(Math.round(VH * 0.9)),
+  (root) => withScrollStub({}, (calls) => {
+    const follower = startScrollFollow();
+    const [block] = extractBlocks(root.querySelector('#target').parentElement);
+
+    window.dispatchEvent(new WheelEvent('wheel', { deltaY: -200 }));
+    follower.follow(rangeFor(block, 0, 19));
+
+    deepEqual(calls, [], 'the page yanked the reader back');
+  }),
+);
+
+await test(
+  'a keyboard scroll suspends following too',
+  atOffset(Math.round(VH * 0.9)),
+  (root) => withScrollStub({}, (calls) => {
+    const follower = startScrollFollow();
+    const [block] = extractBlocks(root.querySelector('#target').parentElement);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp' }));
+    follower.follow(rangeFor(block, 0, 19));
+
+    deepEqual(calls, []);
+  }),
+);
+
+await test(
+  'an ordinary keystroke does not suspend following',
+  // Typing in a comment box should not stop the reader tracking the voice.
+  atOffset(Math.round(VH * 0.9)),
+  (root) => withScrollStub({}, (calls) => {
+    const follower = startScrollFollow();
+    const [block] = extractBlocks(root.querySelector('#target').parentElement);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+    follower.follow(rangeFor(block, 0, 19));
+
+    equal(calls.length, 1);
+  }),
+);
+
+await test(
+  'suspending deliberately stops following for as long as asked',
+  atOffset(Math.round(VH * 0.9)),
+  async (root) => withScrollStub({}, async (calls) => {
+    const follower = startScrollFollow();
+    const [block] = extractBlocks(root.querySelector('#target').parentElement);
+
+    follower.suspend(120);
+    follower.follow(rangeFor(block, 0, 19));
+    equal(calls.length, 0, 'suspend did nothing');
+
+    await new Promise((r) => setTimeout(r, 200));
+    follower.follow(rangeFor(block, 0, 19));
+    equal(calls.length, 1, 'following never resumed');
+  }),
+);
+
+await test(
+  'reduced motion gets an instant jump, not a smooth glide',
+  // Smooth auto-scroll is a migraine and nausea trigger. This is an
+  // accessibility tool, so the preference is not decoration.
+  atOffset(Math.round(VH * 0.9)),
+  (root) => withScrollStub({ reduceMotion: true }, (calls) => {
+    const follower = startScrollFollow();
+    const [block] = extractBlocks(root.querySelector('#target').parentElement);
+    follower.follow(rangeFor(block, 0, 19));
+    equal(calls[0].behavior, 'auto');
+  }),
+);
+
+await test(
+  'a collapsed or hidden range is not chased',
+  '<p id="target" style="display:none">Hello there, friend</p><p>Visible text here.</p>',
+  (root) => withScrollStub({}, (calls) => {
+    const follower = startScrollFollow();
+    const range = document.createRange();
+    range.selectNodeContents(root.querySelector('#target'));
+    follower.follow(range);
+    deepEqual(calls, []);
+  }),
 );
 
 const summary = document.getElementById('summary');
