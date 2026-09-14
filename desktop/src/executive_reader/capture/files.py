@@ -39,18 +39,24 @@ def _strip_repeated_lines(pages: list[str], min_pages: int = 3) -> list[str]:
     hearing it between every page is the fastest way to make a long PDF
     unlistenable.
     """
-    if len(pages) < min_pages:
-        return pages
-    counts: dict[str, int] = {}
-    for page in pages:
-        lines = [ln.strip() for ln in page.splitlines() if ln.strip()]
-        for line in set(lines[:2] + lines[-2:]):
-            if len(line) <= 90:
-                counts[line] = counts.get(line, 0) + 1
-    threshold = max(2, int(len(pages) * 0.6))
-    boilerplate = {line for line, n in counts.items() if n >= threshold}
-    if not boilerplate:
-        return pages
+    # Two jobs, and they used to share one exit. Boilerplate is found
+    # statistically and needs several pages to be sure. A page number is found
+    # by its shape and needs nothing. Returning early when no boilerplate was
+    # detected skipped the page numbers as well, so the same document kept or
+    # dropped them depending only on whether it happened to have a running
+    # footer. A PDF with numbered pages and no header is the ordinary case, and
+    # it read "Page 1", "Page 2" aloud between every page.
+    boilerplate: set[str] = set()
+    if len(pages) >= min_pages:
+        counts: dict[str, int] = {}
+        for page in pages:
+            lines = [ln.strip() for ln in page.splitlines() if ln.strip()]
+            for line in set(lines[:2] + lines[-2:]):
+                if len(line) <= 90:
+                    counts[line] = counts.get(line, 0) + 1
+        threshold = max(2, int(len(pages) * 0.6))
+        boilerplate = {line for line, n in counts.items() if n >= threshold}
+
     cleaned = []
     for page in pages:
         keep = [ln for ln in page.splitlines()

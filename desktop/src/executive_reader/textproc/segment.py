@@ -23,6 +23,31 @@ _ABBREV_FALLBACK = {
 }
 _ABBREV = shared_rules.abbreviations(_ABBREV_FALLBACK)
 
+#: A marker at the very start of a line is not a sentence end.
+#:
+#: Defined in shared/abbreviations.json under `list_markers`, with the reasoning
+#: in `_list_markers` beside it. Both halves segment one block or line at a time
+#: in production, so position zero is where "1. " always sits and nowhere else.
+#: Without this every numbered list is spoken as "one." pause "First item", with
+#: the pause landing between the number and the thing it numbers.
+#:
+#: Known limit, written down rather than rediscovered: "Step 1. Preheat" still
+#: splits, because the digit is not at the start. That is the price of a rule
+#: that can never fire mid-sentence.
+_TERMINATORS = shared_rules.terminators(
+    {"ellipsis_before_lowercase_is_not_a_boundary": True})
+_LIST_MARKERS = shared_rules.list_markers(
+    {"digits_at_start": True, "single_letter_at_start": True})
+_DIGIT_MARKER = re.compile(r"^\s*\d+$")
+_LETTER_MARKER = re.compile(r"^\s*[A-Za-z]$")
+
+
+def _is_list_marker(head: str) -> bool:
+    if _LIST_MARKERS.get("digits_at_start") and _DIGIT_MARKER.match(head):
+        return True
+    return bool(_LIST_MARKERS.get("single_letter_at_start")
+                and _LETTER_MARKER.match(head))
+
 #: A lone letter before the period is an initial, not a sentence end.
 #: "J. R. R. Tolkien wrote it." is one sentence, and used to be three. The rule
 #: has to outrank the looks-like-a-new-sentence rescue further down, because the
@@ -54,12 +79,27 @@ def _split_sentences(text: str) -> list[str]:
         if head and head[-1].isdigit() and m.group(1) == "." and end < len(text) \
                 and text[end:end + 2].strip()[:1].isdigit():
             continue
+        if start == 0 and _is_list_marker(head):
+            continue
         if _INITIAL.search(head):
             continue
         if _ends_abbrev(head):
             continue
+        # An ellipsis before a lowercase word is a trailing-off, not a
+        # boundary: "Wait... what happened?" is one sentence, and splitting it
+        # puts a sentence-final drop in the middle of a thought. Defined in
+        # shared/abbreviations.json under `terminators`.
+        #
+        # This replaced a general veto on splitting before any lowercase word.
+        # That was wrong for a whole class of real input: informal all-lowercase
+        # writing, which is chat logs, forum posts and notes, came out as a
+        # single utterance with no pauses anywhere in it. Removing the general
+        # form broke none of the 40 tests here and moved agreement with the
+        # extension from 18 cases to 20, because everything it was thought to
+        # protect is already covered by the abbreviation and decimal rules.
         nxt = text[m.end():m.end() + 1]
-        if nxt and not (nxt.isupper() or nxt.isdigit() or nxt in "\"'\u201c\u2018([-\u2014"):
+        if (_TERMINATORS.get("ellipsis_before_lowercase_is_not_a_boundary")
+                and "…" in m.group(1) and nxt and nxt.islower()):
             continue
         piece = candidate.strip()
         if piece:

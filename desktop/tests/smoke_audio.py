@@ -20,7 +20,7 @@ from executive_reader.document import Document
 from executive_reader.player.engine import Reader
 from executive_reader.tts.registry import Registry
 
-TEXT = ("Aloud is working. This is the second sentence, read at normal speed. "
+TEXT = ("Executive Reader is working. This is the second sentence, read at normal speed. "
         "And this third one proves that skipping ahead lands cleanly.")
 
 

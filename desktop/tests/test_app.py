@@ -421,6 +421,143 @@ def test_editing_a_pronunciation_discards_audio_made_under_the_old_rule():
                                  for text, _speed in app.registry.spoken)),             [t for t, _s in app.registry.spoken]
 
 
+
+def _claude_threads() -> list:
+    return [t for t in threading.enumerate()
+            if t.name == "executive-reader-claude" and t.is_alive()]
+
+
+def _reply_line(text: str) -> str:
+    import json
+    return json.dumps({
+        "type": "assistant",
+        "message": {"role": "assistant",
+                    "content": [{"type": "text", "text": text}]},
+    }) + chr(10)
+
+
+def _fake_transcript(folder: Path) -> Path:
+    """A minimal Claude Code transcript the watcher will accept."""
+    path = folder / "session.jsonl"
+    path.write_text(_reply_line("First reply."), encoding="utf-8")
+    return path
+
+
+def _append_reply(path: Path, text: str) -> None:
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(_reply_line(text))
+
+
+def test_toggling_the_claude_watch_never_leaves_two_readers():
+    """Off then straight back on used to leave the old thread running.
+
+    The loop waits a second between polls, so a stop set and cleared inside
+    that second was never seen. The old thread woke to a cleared flag and a
+    fresh tail and carried on, and two threads polling one Tail share a file
+    offset: a reply is then spoken twice, or swallowed.
+    """
+    saved = app_module.ct.latest_session
+    try:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            path = _fake_transcript(Path(tmp))
+            app_module.ct.latest_session = lambda *a, **k: path
+            before = len(_claude_threads())
+            with temp_app() as application:
+                application.set_claude_watch(True)
+                assert len(_claude_threads()) == before + 1, "watcher did not start"
+
+                # Off and on again well inside the poll wait.
+                for _ in range(5):
+                    application.set_claude_watch(False)
+                    application.set_claude_watch(True)
+                    assert len(_claude_threads()) == before + 1, (
+                        str(len(_claude_threads()) - before)
+                        + " watchers alive after toggling")
+
+                application.set_claude_watch(False)
+                assert len(_claude_threads()) == before, "watcher did not stop"
+    finally:
+        app_module.ct.latest_session = saved
+
+
+def test_shutdown_waits_for_a_watcher_that_is_mid_read():
+    """It set the stop flag, then closed the database the watcher writes to.
+
+    Same shape as closing the audio device while the playback thread was still
+    inside it, which segfaulted the interpreter after everything had reported
+    success. Merely asserting no watcher survives shutdown is not enough to
+    catch it: with nothing to do, the thread exits between the flag being set
+    and the assertion running, and the test passes against the broken version.
+
+    So the watcher is held inside a read when shutdown is called. Without the
+    join, shutdown returns while it is still in there.
+    """
+    saved = app_module.ct.latest_session
+    entered = threading.Event()
+    try:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            path = _fake_transcript(Path(tmp))
+            app_module.ct.latest_session = lambda *a, **k: path
+            before = len(_claude_threads())
+            with temp_app() as application:
+                def slow_read(*_args, **_kwargs):
+                    entered.set()
+                    time.sleep(0.5)
+
+                application.read = slow_read
+                application.set_claude_watch(True)
+                # The tail starts at the end of the file, so the reply has to
+                # arrive after the watch is running for it to be seen at all.
+                _append_reply(path, "A reply that lands while we are watching.")
+                assert entered.wait(timeout=8), "the watcher never read anything"
+            # temp_app calls shutdown on the way out, while slow_read is running.
+            assert len(_claude_threads()) == before, (
+                "shutdown returned with the watcher still inside a read, so the"
+                " database and audio device were closed underneath it")
+    finally:
+        app_module.ct.latest_session = saved
+
+
+
+def test_replies_arriving_together_are_read_as_one_document():
+    """Reading is not a queue, so a batch must not be read one at a time.
+
+    A poll returns everything written since the last one. Reader.load() stops
+    whatever is speaking and replaces it, so two replies landing in the same
+    second meant the first was cut off part-way through a sentence and the
+    second began, with nothing to say a reply had been skipped.
+    """
+    saved = app_module.ct.latest_session
+    read_texts = []
+    try:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            path = _fake_transcript(Path(tmp))
+            app_module.ct.latest_session = lambda *a, **k: path
+            with temp_app() as application:
+                application.read = (
+                    lambda doc, **kw: read_texts.append(doc.text))
+                application.set_claude_watch(True)
+                # Three replies inside one poll interval.
+                for text in ("First new reply.", "Second new reply.",
+                             "Third new reply."):
+                    _append_reply(path, text)
+                assert _wait(lambda: bool(read_texts), timeout=8), (
+                    "nothing was read at all")
+                # Give the loop another poll to prove it does not read again.
+                time.sleep(1.5)
+                application.set_claude_watch(False)
+    finally:
+        app_module.ct.latest_session = saved
+
+    assert len(read_texts) == 1, (
+        str(len(read_texts)) + " separate reads, so all but the last were cut off")
+    body = read_texts[0]
+    for text in ("First new reply.", "Second new reply.", "Third new reply."):
+        assert text in body, text + " was dropped: " + repr(body)
+    assert body.index("First") < body.index("Second") < body.index("Third"), (
+        "replies were reordered: " + repr(body))
+
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):
