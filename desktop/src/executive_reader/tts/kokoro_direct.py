@@ -160,6 +160,26 @@ class KokoroModel:
         row = min(max(token_count, 1), len(voice)) - 1
         return voice[row]
 
+    #: What the published Kokoro ONNX builds call the two required inputs.
+    #: Listed most common first; the loaded model decides which is used.
+    _TOKEN_INPUTS = ("tokens", "input_ids")
+    _STYLE_INPUTS = ("style", "ref_s")
+
+    def _pick_input(self, candidates: tuple, what: str) -> str:
+        for name in candidates:
+            if name in self._input_names:
+                return name
+        raise KokoroUnavailable(
+            "This Kokoro model names its " + what + " input something "
+            "unexpected: " + ", ".join(sorted(self._input_names))
+            + ". Expected one of " + ", ".join(candidates) + ".")
+
+    def _token_input(self) -> str:
+        return self._pick_input(self._TOKEN_INPUTS, "token")
+
+    def _style_input(self) -> str:
+        return self._pick_input(self._STYLE_INPUTS, "style")
+
     def synthesize(self, phonemes: str, voice: str,
                    speed: float = 1.0) -> tuple[np.ndarray, int, list[str]]:
         """Return (samples, sample rate, dropped symbols)."""
@@ -179,9 +199,17 @@ class KokoroModel:
             for part in chunk(ids):
                 style = self.style_for(np.asarray(style_bank), len(part))
                 tokens = np.array([[0, *part, 0]], dtype=np.int64)
+                # Ask the model what its inputs are called rather than assuming.
+                # Published Kokoro ONNX builds differ here: this one names them
+                # `tokens` and `style`, others use `input_ids` and `ref_s`. The
+                # name was hardcoded to `input_ids`, so every synthesis raised
+                # "Required inputs (['tokens']) are missing" — and nothing
+                # noticed, because the engine cannot run at all until a 310 MB
+                # model is downloaded, and no test or harness downloads one.
                 feeds = {
-                    "input_ids": tokens,
-                    "style": np.asarray(style, dtype=np.float32).reshape(1, -1),
+                    self._token_input(): tokens,
+                    self._style_input(): np.asarray(
+                        style, dtype=np.float32).reshape(1, -1),
                 }
                 # Speed is a synthesis input, so fast reading keeps its pitch.
                 # Resampling finished audio is what makes it sound chipmunky.

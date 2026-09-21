@@ -239,11 +239,44 @@ def test_the_app_survives_being_packaged_without_the_vendored_data():
 
 
 def test_missing_pieces_are_reported_distinctly():
-    """Three different absences with three different fixes."""
-    from executive_reader.tts.registry import Registry
-    kokoro = Registry().kokoro
-    # The model is genuinely not downloaded on this machine.
-    assert kokoro.blocked_by == "the voice model download", kokoro.blocked_by
+    """Three different absences with three different fixes.
+
+    This asserted that the model was not downloaded on this machine, which is a
+    fact about the machine rather than about the code. It passed for as long as
+    nobody had the model, and that is part of why the engine could never have
+    run: the one test naming Kokoro asserted it was absent, so the synthesis
+    path was unreachable from the suite and its input names were wrong for
+    every published build. Each state is now asked for directly.
+    """
+    from executive_reader.tts import kokoro_engine
+
+    engine = kokoro_engine.KokoroEngine()
+    saved = (kokoro_engine.importlib.util.find_spec,
+             kokoro_engine.phonemes.available,
+             kokoro_engine.kokoro_direct.vendor_dir,
+             type(engine).installed)
+    try:
+        # Runtime missing outranks everything else: without it the rest cannot
+        # even be asked.
+        kokoro_engine.importlib.util.find_spec = lambda name: None
+        assert engine.blocked_by == "the onnxruntime package", engine.blocked_by
+
+        kokoro_engine.importlib.util.find_spec = lambda name: object()
+        kokoro_engine.phonemes.available = lambda: False
+        assert engine.blocked_by == "the pronunciation dictionary", engine.blocked_by
+
+        kokoro_engine.phonemes.available = lambda: True
+        kokoro_engine.kokoro_direct.vendor_dir = lambda: "somewhere"
+        type(engine).installed = property(lambda self: False)
+        assert engine.blocked_by == "the voice model download", engine.blocked_by
+
+        type(engine).installed = property(lambda self: True)
+        assert engine.blocked_by == "", engine.blocked_by
+    finally:
+        (kokoro_engine.importlib.util.find_spec,
+         kokoro_engine.phonemes.available,
+         kokoro_engine.kokoro_direct.vendor_dir) = saved[:3]
+        type(engine).installed = saved[3]
 
 
 
@@ -393,6 +426,42 @@ def test_training_your_own_voice_remains_possible():
     assert engine.library_present, "onnxruntime and the dictionary are enough"
     assert hasattr(engine, "install_custom")
 
+
+
+def test_model_input_names_come_from_the_model():
+    """The published Kokoro builds do not agree on what their inputs are called.
+
+    This one names them `tokens` and `style`; others use `input_ids` and
+    `ref_s`. The name was hardcoded to `input_ids`, so every synthesis raised
+    "Required inputs (['tokens']) are missing" the first time anyone actually
+    downloaded the model. Nothing caught it because the engine cannot run
+    without a 310 MB file that no test fetches, so the whole synthesis path was
+    unreachable from the suite.
+
+    The names are asked of the loaded session here rather than a real model
+    being loaded, which keeps the check free.
+    """
+    from executive_reader.tts import kokoro_direct
+
+    model = kokoro_direct.KokoroModel.__new__(kokoro_direct.KokoroModel)
+
+    model._input_names = {"tokens", "style", "speed"}
+    assert model._token_input() == "tokens"
+    assert model._style_input() == "style"
+
+    model._input_names = {"input_ids", "ref_s"}
+    assert model._token_input() == "input_ids"
+    assert model._style_input() == "ref_s"
+
+    # An unrecognised build must say so rather than fail deep inside the
+    # runtime with a message about tensors.
+    model._input_names = {"mystery"}
+    try:
+        model._token_input()
+    except Exception as exc:
+        assert "mystery" in str(exc), str(exc)
+    else:
+        raise AssertionError("an unknown input layout was accepted")
 
 if __name__ == "__main__":
     passed = failed = skipped = 0
