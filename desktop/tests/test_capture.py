@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 
@@ -930,6 +931,155 @@ def test_hard_wrapped_pdf_prose_is_rejoined_into_one_sentence():
     joined = [s for s in segments if "plainly one sentence" in s]
     assert len(joined) == 1, segments
     assert joined[0].startswith("The exporter wrapped"), joined[0]
+
+
+
+def _watcher_over(pages, **kwargs):
+    """A watcher whose window returns each page in turn, then repeats the last."""
+    from executive_reader.capture import watch
+    from executive_reader.document import Document
+
+    state = {"i": 0}
+
+    def fake_capture(*_a, **_k):
+        i = min(state["i"], len(pages) - 1)
+        state["i"] += 1
+        return Document(text=pages[i], title="Fake Window", uri="", source="uia")
+
+    spoken = []
+    w = watch.WindowWatcher(on_text=lambda text, title: spoken.append(text),
+                            interval=0.05, **kwargs)
+    return w, spoken, fake_capture, state
+
+
+def test_a_watcher_never_reads_what_was_already_on_screen():
+    """Switching it on must not read the window back at you.
+
+    This is also what keeps sidebars, toolbars and navigation out of it. They
+    are present when watching starts, so they are never new, so they are never
+    read — without any list of things to ignore.
+    """
+    from executive_reader.capture import uia as uia_mod
+    from executive_reader.capture import watch
+
+    pages = ["Navigation and a sidebar full of things that were already here.",
+             "Navigation and a sidebar full of things that were already here."]
+    w, spoken, fake, _state = _watcher_over(pages, mode=watch.FOLLOW)
+    saved = uia_mod.capture
+    try:
+        uia_mod.capture = fake
+        w.start()
+        time.sleep(0.4)
+    finally:
+        w.stop()
+        uia_mod.capture = saved
+    assert spoken == [], spoken
+
+
+def test_a_watcher_reads_only_the_text_that_appeared_after_it_started():
+    from executive_reader.capture import uia as uia_mod
+    from executive_reader.capture import watch
+
+    before = "A sidebar item that is long enough to count as a line of prose."
+    after = before + "\n" + "Here is a brand new sentence that arrived afterwards."
+    w, spoken, fake, _state = _watcher_over([before, after], mode=watch.FOLLOW)
+    saved = uia_mod.capture
+    try:
+        uia_mod.capture = fake
+        w.start()
+        deadline = time.time() + 6
+        while time.time() < deadline and not spoken:
+            time.sleep(0.05)
+    finally:
+        w.stop()
+        uia_mod.capture = saved
+
+    assert spoken, "nothing was read"
+    body = "\n".join(spoken)
+    assert "brand new sentence" in body, body
+    assert "sidebar item" not in body, "it read what was already there"
+
+
+def test_a_watcher_ignores_labels_and_counters():
+    """Short lines are buttons, badges and clocks, not sentences.
+
+    Without this the watcher announces every changing timestamp and unread
+    count in the window, which is worse than silence.
+    """
+    from executive_reader.capture import uia as uia_mod
+    from executive_reader.capture import watch
+
+    before = "Something already present and long enough to be a real line."
+    after = before + "\n3\nNew\n12:04\n" + "A genuine sentence that should be spoken aloud."
+    w, spoken, fake, _state = _watcher_over([before, after], mode=watch.FOLLOW)
+    saved = uia_mod.capture
+    try:
+        uia_mod.capture = fake
+        w.start()
+        deadline = time.time() + 6
+        while time.time() < deadline and not spoken:
+            time.sleep(0.05)
+    finally:
+        w.stop()
+        uia_mod.capture = saved
+
+    body = "\n".join(spoken)
+    assert "genuine sentence" in body, body
+    for noise in ("12:04", "New", "3"):
+        assert noise not in body.replace("genuine sentence", ""), body
+
+
+def test_locked_mode_reads_its_own_window_not_the_front_one():
+    """The whole point of locking: the front window must be irrelevant."""
+    from executive_reader.capture import uia as uia_mod
+    from executive_reader.capture import watch
+    from executive_reader.document import Document
+
+    asked = []
+
+    def fake_named(match, *_a, **_k):
+        asked.append(match)
+        return Document(text="Locked window text that is long enough to read.",
+                        title=match, uri="", source="uia")
+
+    def fake_front(*_a, **_k):
+        raise AssertionError("locked mode must not read the foreground window")
+
+    saved = (uia_mod.capture_window, uia_mod.capture)
+    w = watch.WindowWatcher(on_text=lambda *a: None, mode=watch.LOCKED,
+                            target="Claude", interval=0.05)
+    try:
+        uia_mod.capture_window, uia_mod.capture = fake_named, fake_front
+        w.start()
+        time.sleep(0.3)
+    finally:
+        w.stop()
+        uia_mod.capture_window, uia_mod.capture = saved
+    assert asked and set(asked) == {"Claude"}, asked
+
+
+def test_stopping_a_watcher_waits_for_it():
+    """Returning while it is still mid-read lets it touch a closed store."""
+    from executive_reader.capture import uia as uia_mod
+    from executive_reader.capture import watch
+    from executive_reader.document import Document
+
+    def slow(*_a, **_k):
+        time.sleep(0.3)
+        return Document(text="Some text long enough to be treated as a line.",
+                        title="W", uri="", source="uia")
+
+    saved = uia_mod.capture
+    w = watch.WindowWatcher(on_text=lambda *a: None, mode=watch.FOLLOW,
+                            interval=0.05)
+    try:
+        uia_mod.capture = slow
+        w.start()
+        time.sleep(0.1)
+        w.stop()
+        assert not w.running, "stop returned with the watcher still alive"
+    finally:
+        uia_mod.capture = saved
 
 
 if __name__ == "__main__":

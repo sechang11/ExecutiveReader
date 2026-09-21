@@ -12,7 +12,7 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from .capture import claude_transcript as ct
-from .capture import clipboard, files, ladder, ocr
+from .capture import clipboard, files, ladder, ocr, uia, watch
 from .config import Config
 from .document import Document
 from .player.engine import IDLE, PLAYING, Reader
@@ -75,6 +75,10 @@ class App:
         self.reader.on_finished = self._finished
         self.reader.on_error = lambda msg: self.on_error(msg)
 
+        self._window_watcher: watch.WindowWatcher | None = None
+        self._watch_lock = threading.Lock()
+        self._watch_pending: list[str] = []
+        self._watch_title = ""
         self._doc: Document | None = None
         self._segment_started = 0.0
         self._save_lock = threading.Lock()
@@ -107,6 +111,8 @@ class App:
         self._persist(self.reader.total, 0.0, finished=True)
         self.on_status("Finished reading.")
         self.on_state(IDLE)
+        # Anything the watcher queued while this was speaking goes now.
+        self._flush_watched()
 
     def _flush_position(self) -> None:
         if self._doc is not None:
@@ -341,6 +347,78 @@ class App:
             self._clip_watcher.stop()
             self._clip_watcher = None
 
+    # --- window watch ----------------------------------------------------
+    def set_window_watch(self, mode: str) -> None:
+        """Read new text as it appears in a window. "off", "follow" or "locked".
+
+        `follow` tracks whichever window is in front. `locked` stays on the
+        window that is in front when it is switched on, so a long answer keeps
+        being read while you work somewhere else. Following cannot do that: the
+        moment you click away it would start reading what you clicked on.
+
+        Neither reads what is already on screen. Everything present when the
+        watcher starts counts as seen, which is also what keeps sidebars,
+        toolbars and navigation out of it without a list of things to ignore.
+        """
+        if self._window_watcher is not None:
+            self._window_watcher.stop()
+            self._window_watcher = None
+        self.config.window_watch = mode if mode in (watch.FOLLOW, watch.LOCKED) else "off"
+        if self.config.window_watch == "off":
+            self.on_status("Stopped watching.")
+            return
+
+        target = ""
+        if self.config.window_watch == watch.LOCKED:
+            try:
+                target = uia.window_info().title
+            except Exception:
+                target = ""
+            if not target:
+                self.on_error("Could not tell which window to lock onto.")
+                self.config.window_watch = "off"
+                return
+
+        watcher = watch.WindowWatcher(
+            on_text=self._watched_text,
+            mode=self.config.window_watch,
+            target=target,
+            interval=self.config.window_watch_interval)
+        watcher.on_error = self.on_error
+        watcher.start()
+        self._window_watcher = watcher
+        if self.config.window_watch == watch.LOCKED:
+            self.on_status("Reading new text in " + target[:40] + ".")
+        else:
+            self.on_status("Reading new text in whichever window is in front.")
+
+    def _watched_text(self, text: str, title: str) -> None:
+        """Queue a new passage instead of interrupting the one being read.
+
+        Reading is not a queue: load() stops whatever is speaking and replaces
+        it. A window produces text continuously, so handing each passage
+        straight to the reader means every one cuts off the last and only the
+        final few words of each are ever heard. The transcript watcher had the
+        same defect for bursts; here it would be the normal case rather than a
+        burst.
+        """
+        with self._watch_lock:
+            self._watch_pending.append(text)
+            self._watch_title = title or self._watch_title
+        self._flush_watched()
+
+    def _flush_watched(self) -> None:
+        if self.reader.state == PLAYING:
+            return
+        with self._watch_lock:
+            if not self._watch_pending:
+                return
+            body = (chr(10) + chr(10)).join(self._watch_pending)
+            title = self._watch_title
+            self._watch_pending.clear()
+        self.read(Document(text=body, title=title or "Window", source="watch"),
+                  resume=False)
+
     # --- transport -------------------------------------------------------
     def toggle(self) -> None:
         self.reader.toggle()
@@ -420,6 +498,8 @@ class App:
     def shutdown(self) -> None:
         self._flush_position()
         self._stop_claude_watch()
+        if self._window_watcher is not None:
+            self._window_watcher.stop()
         if self._clip_watcher is not None:
             self._clip_watcher.stop()
         if self._sleep_timer is not None:

@@ -68,6 +68,17 @@ class TrayApp(QObject):
         self.player.set_speed(app.config.speed)
 
     # --- menu ------------------------------------------------------------
+    def _set_watch(self, mode: str) -> None:
+        self.app.set_window_watch(mode)
+        current = self.app.config.window_watch
+        # Set without re-firing: assigning checked emits triggered on some
+        # platforms, which would toggle the mode straight back off.
+        for action, name in ((self.act_follow, "follow"),
+                             (self.act_locked, "locked")):
+            action.blockSignals(True)
+            action.setChecked(current == name)
+            action.blockSignals(False)
+
     def _menu(self) -> QMenu:
         menu = QMenu()
         menu.addAction("Read this window", self.app.read_smart)
@@ -76,6 +87,17 @@ class TrayApp(QObject):
         menu.addAction("Read screen (OCR)", lambda: self.app.read_screen(False))
         menu.addAction("Read screen, scrolling",
                        lambda: self.app.read_screen(True))
+        menu.addSeparator()
+        # Checkable, and mutually exclusive, because the two modes answer
+        # different questions and having both on means nothing.
+        self.act_follow = menu.addAction("Watch: follow the front window")
+        self.act_follow.setCheckable(True)
+        self.act_follow.triggered.connect(
+            lambda on: self._set_watch("follow" if on else "off"))
+        self.act_locked = menu.addAction("Watch: lock to this window")
+        self.act_locked.setCheckable(True)
+        self.act_locked.triggered.connect(
+            lambda on: self._set_watch("locked" if on else "off"))
         menu.addSeparator()
         menu.addAction("Read latest Claude session",
                        lambda: self.app.read_claude_session(last_n=6))

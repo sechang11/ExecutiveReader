@@ -53,6 +53,8 @@ class Config:
     auto_resume: bool = True        # jump to the saved position when re-reading a source
 
     # --- claude transcript mode ---
+    window_watch: str = "off"        # off | follow | locked
+    window_watch_interval: float = 1.5
     claude_watch: bool = False
     claude_read_thinking: bool = False
     claude_projects_dir: str = ""   # blank = %USERPROFILE%/.claude/projects

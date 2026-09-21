@@ -15,6 +15,7 @@ silently breaks tree traversal, so the private helpers never do it themselves.
 """
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 
@@ -75,9 +76,38 @@ def _safe_class(node) -> str:
         return ""
 
 
+#: A chunk that is nothing but a web address. Reading one aloud is a string of
+#: letters and slashes, never a sentence, and on a search results page there is
+#: one for every result.
+_BARE_URL = re.compile(r"^\s*(?:https?://|www\.)\S+\s*$", re.I)
+
+
+def _text_of(node, ctype: str) -> str:
+    """What this control should contribute, by kind.
+
+    The rule used to be "take whichever of Name and Value is longer", which is
+    right for an edit box and wrong for a link: a link's Value is its href, and
+    an href is almost always longer than the words it sits under. So every link
+    on a page was read as its address. On a search results page that is the
+    whole page, which is what "it reads the nav bar" turned out to mean.
+    """
+    if ctype == "HyperlinkControl":
+        # The words, never the destination.
+        return _safe_name(node)
+    if ctype == "EditControl":
+        # Here Value is the typed contents and Name is the field's label.
+        value = _safe_value(node)
+        return value or _safe_name(node)
+    name = _safe_name(node)
+    value = _safe_value(node)
+    return value if len(value) > len(name) else name
+
+
 def _is_noise(text: str) -> bool:
     stripped = text.strip().lower()
-    return not stripped or stripped in _CHROME_NOISE or len(stripped) < 2
+    if not stripped or stripped in _CHROME_NOISE or len(stripped) < 2:
+        return True
+    return bool(_BARE_URL.match(stripped))
 
 
 def _pattern(ctrl, pattern_id: int):
@@ -124,7 +154,7 @@ def _collect(root, deadline: float) -> str:
     Chrome renders pages as a tree of named Text and Link nodes rather than one
     TextPattern region, so this walk is what actually reads a web page.
     """
-    parts: list[str] = []
+    parts: list[tuple[str, str]] = []   # (control type, text)
     seen: set[str] = set()
     nodes = 0
 
@@ -140,15 +170,12 @@ def _collect(root, deadline: float) -> str:
         if ctype in _SKIP_CONTROLS:
             return
         if ctype in _TEXT_CONTROLS:
-            chunk = _safe_name(node)
-            value = _safe_value(node)
-            if len(value) > len(chunk):
-                chunk = value
+            chunk = _text_of(node, ctype)
             # Headings and nav labels repeat across a page; keep the first.
             key = chunk.lower()
             if chunk and not _is_noise(chunk) and key not in seen:
                 seen.add(key)
-                parts.append(chunk)
+                parts.append((ctype, chunk))
         try:
             children = node.GetChildren()
         except Exception:
@@ -157,7 +184,38 @@ def _collect(root, deadline: float) -> str:
             visit(child, depth + 1)
 
     visit(root, 0)
-    return "\n".join(parts)
+    return "\n".join(_drop_navigation(parts))
+
+
+#: A link this short with no sentence in it is a menu item, not prose.
+_NAV_LINK_CHARS = 45
+
+
+def _drop_navigation(parts: list) -> list:
+    """Remove menu links, but only from a window that has real prose in it.
+
+    "Skip to main content", "Images", "More", "Sign in" are links in the page
+    rather than browser furniture, so the furniture list cannot catch them and
+    neither can anything that only looks at one node. What marks them is the
+    company they keep: a short link with no sentence in it, sitting in a window
+    that also contains paragraphs.
+
+    The guard matters. On a page that is genuinely a list of links — a search
+    results page read on purpose, a bookmarks manager — dropping them would
+    leave nothing at all, so this only fires when prose exists to keep.
+    """
+    prose = sum(1 for ctype, text in parts
+                if ctype != "HyperlinkControl" and len(text) > 80)
+    if prose < 3:
+        return [text for _ctype, text in parts]
+    kept = []
+    for ctype, text in parts:
+        short_link = (ctype == "HyperlinkControl"
+                      and len(text) <= _NAV_LINK_CHARS
+                      and not any(c in text for c in ".!?"))
+        if not short_link:
+            kept.append(text)
+    return kept
 
 
 def _candidate_roots(win, deadline: float) -> list:
@@ -185,6 +243,18 @@ def _candidate_roots(win, deadline: float) -> list:
     return found
 
 
+def _prose_score(text: str) -> int:
+    """Characters that are part of a sentence, not a label.
+
+    Regions used to be ranked by total length, which picks a sidebar over a
+    conversation whenever the sidebar has enough items: fifty menu entries
+    outweigh three paragraphs. Counting only lines long enough to be prose
+    ranks by what someone actually wants read, and a window with no prose at
+    all still scores zero everywhere and falls through to the old behaviour.
+    """
+    return sum(len(line) for line in text.splitlines() if len(line.strip()) > 80)
+
+
 def _extract(win, deadline: float) -> str:
     """Best available text for a window, trying the cheapest route first."""
     direct = _text_pattern_text(win)
@@ -192,12 +262,14 @@ def _extract(win, deadline: float) -> str:
         return direct
 
     best = ""
+    best_score = -1
     for doc in _candidate_roots(win, deadline):
         if time.monotonic() > deadline:
             break
         text = _text_pattern_text(doc) or _collect(doc, deadline)
-        if len(text) > len(best):
-            best = text
+        score = _prose_score(text)
+        if score > best_score:
+            best, best_score = text, score
     if len(best) >= _MIN_USEFUL:
         return best
 
