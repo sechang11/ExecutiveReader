@@ -255,6 +255,32 @@ def _prose_score(text: str) -> int:
     return sum(len(line) for line in text.splitlines() if len(line.strip()) > 80)
 
 
+#: A leading run of short lines this long is a menu, a sidebar or a tool strip.
+#: No article opens with eight consecutive fragments, so the cut is safe; the
+#: Claude desktop app puts 301 of them in front of the conversation.
+_LEADING_CHROME = 8
+
+
+def _drop_leading_chrome(text: str) -> str:
+    """Remove the menu block a window puts before its content.
+
+    Scoping to a document region is not enough in an app that renders its
+    sidebar and its conversation inside one region, which is what an Electron
+    app usually does. What separates them is shape rather than structure: the
+    furniture is a long run of fragments, and the content starts at the first
+    real sentence.
+
+    Only fires when there is prose to keep and the run is long, so a page that
+    genuinely opens with a few short lines is left alone.
+    """
+    lines = text.splitlines()
+    first_long = next((i for i, line in enumerate(lines)
+                       if len(line.strip()) > 80), None)
+    if first_long is None or first_long < _LEADING_CHROME:
+        return text
+    return chr(10).join(lines[first_long:])
+
+
 def _extract(win, deadline: float) -> str:
     """Best available text for a window, trying the cheapest route first."""
     direct = _text_pattern_text(win)
@@ -271,7 +297,7 @@ def _extract(win, deadline: float) -> str:
         if score > best_score:
             best, best_score = text, score
     if len(best) >= _MIN_USEFUL:
-        return best
+        return _drop_leading_chrome(best)
 
     whole = _collect(win, deadline)
     return whole if len(whole) > len(best) else best

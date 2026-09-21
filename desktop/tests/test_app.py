@@ -81,8 +81,19 @@ def temp_app():
     """An App with a throwaway database and no real audio device."""
     real_registry = app_module.Registry
     app_module.Registry = StubRegistry
+    # Redirect the data directory as well as the store. `Config()` looks up its
+    # own path when it saves, and App.shutdown() always saves, so without this
+    # every run of this file overwrote the real settings of whoever ran it with
+    # defaults. That is what CAVEATS 24 describes, and fixing it in test_ui.py
+    # and not here left the same hazard in the file that constructs the most
+    # Apps: it silently reset the chosen voice back to a Windows one.
+    from executive_reader import config as config_module
+    from executive_reader.store import db as db_module
+    saved_dirs = (config_module.data_dir, db_module.data_dir)
     try:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            config_module.data_dir = lambda: Path(tmp)
+            db_module.data_dir = lambda: Path(tmp)
             store = Store(Path(tmp) / "t.db")
             config = Config()
             config.auto_resume = True
@@ -94,6 +105,7 @@ def temp_app():
                 application.shutdown()
     finally:
         app_module.Registry = real_registry
+        config_module.data_dir, db_module.data_dir = saved_dirs
 
 
 def _wait(predicate, timeout: float = 8.0) -> bool:

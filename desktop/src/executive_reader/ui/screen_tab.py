@@ -121,6 +121,16 @@ class ScreenTab(QWidget):
         self.btn_pick.clicked.connect(self.choose_area)
         row.addWidget(self.btn_pick)
 
+        self.btn_now = QPushButton("Read the area now")
+        self.btn_now.setMinimumHeight(40)
+        self.btn_now.setEnabled(False)
+        self.btn_now.setToolTip(
+            "Read the chosen area once, without waiting for it to change. "
+            "None of the buttons above do this: they read a window, a "
+            "selection, the clipboard or the whole screen.")
+        self.btn_now.clicked.connect(self.read_area_now)
+        row.addWidget(self.btn_now)
+
         self.btn_stop = QPushButton("Stop watching")
         self.btn_stop.setMinimumHeight(40)
         self.btn_stop.setEnabled(False)
@@ -165,7 +175,9 @@ class ScreenTab(QWidget):
         watcher.start()
         self._watcher = watcher
         self.btn_stop.setEnabled(True)
-        self.status.emit("Watching that area for text.")
+        self.btn_now.setEnabled(True)
+        self.status.emit("Watching that area. It reads new text by itself; "
+                         "use Read the area now to hear it again.")
         if self.chk_highlight.isChecked():
             self._highlight.show_words([], self._rect)
 
@@ -177,6 +189,27 @@ class ScreenTab(QWidget):
         self._highlight.clear()
         if not quiet:
             self.status.emit("Stopped watching the area.")
+
+    def read_area_now(self) -> None:
+        """Read the area once, on demand.
+
+        Worth its own button because none of the reading buttons above cover
+        it: they read a window, a selection, the clipboard or the whole
+        screen, and the area is none of those. Without this the only way to
+        hear it was to wait for the text inside it to change.
+        """
+        if not self._rect:
+            self.status.emit("Choose an area first.")
+            return
+        try:
+            capture = region_mod.read_region(self._rect)
+        except Exception as exc:
+            self.status.emit(str(exc))
+            return
+        if not capture.text.strip():
+            self.status.emit("No text recognised in that area.")
+            return
+        self._add_capture(capture)
 
     # --- captures --------------------------------------------------------
     def _captured(self, capture) -> None:

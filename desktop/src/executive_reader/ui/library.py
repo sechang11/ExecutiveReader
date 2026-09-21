@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox,
                                QSpinBox, QTableWidget, QTableWidgetItem,
                                QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
+from ..tts.piper_engine import CATALOG as PIPER_CATALOG
 from .screen_tab import ScreenTab
 from ..textproc import shared_rules
 from ..textproc.pronounce import Rule
@@ -195,6 +196,23 @@ class Library(QMainWindow):
         download.addStretch(1)
         layout.addLayout(download)
 
+        # Piper is a second opinion rather than an upgrade. Its voices are
+        # trained one per speaker, so a particular one can suit a listener
+        # better than Kokoro even though Kokoro is the stronger model overall,
+        # and each is a small download rather than one large one.
+        piper_row = QHBoxLayout()
+        piper_row.addWidget(QLabel("Piper voice:"))
+        self.piper_box = QComboBox()
+        for vid, (_folder, label, lang, gender, size_mb) in PIPER_CATALOG.items():
+            shown = label + "  " + lang + (" " + gender if gender else "")
+            shown += "   " + str(size_mb) + " MB"
+            self.piper_box.addItem(shown, vid)
+        piper_row.addWidget(self.piper_box, 1)
+        self.piper_button = QPushButton("Download this one")
+        self.piper_button.clicked.connect(self._install_piper)
+        piper_row.addWidget(self.piper_button)
+        layout.addLayout(piper_row)
+
         from ..tts import espeak_addon
         note = QLabel(
             espeak_addon.detect().summary
@@ -253,6 +271,36 @@ class Library(QMainWindow):
                 "Voice preview")
         except EngineError as exc:
             QMessageBox.warning(self, "Voice unavailable", str(exc))
+
+    def _install_piper(self) -> None:
+        """Fetch one Piper voice: a model file and its settings."""
+        voice_id = self.piper_box.currentData()
+        if not voice_id:
+            return
+        engine = self.app.registry.piper
+        dialog = QProgressDialog("Downloading " + voice_id + "...", "Cancel", 0, 100, self)
+        dialog.setWindowModality(Qt.WindowModal)
+        dialog.show()
+
+        def progress(done: int, total: int) -> None:
+            if total:
+                dialog.setValue(int(done / total * 100))
+            dialog.setLabelText("Downloading " + voice_id + chr(10)
+                                + human(done) + " of " + human(total))
+            from PySide6.QtWidgets import QApplication
+            QApplication.processEvents()
+
+        try:
+            engine.install(voice_id, progress)
+        except Exception as exc:
+            dialog.close()
+            QMessageBox.critical(self, "Download failed", str(exc))
+            return
+        dialog.close()
+        self.refresh()
+        QMessageBox.information(
+            self, "Voice ready",
+            voice_id + " is installed. Pick it in the list above to use it.")
 
     def _install_kokoro(self) -> None:
         kokoro = self.app.registry.kokoro

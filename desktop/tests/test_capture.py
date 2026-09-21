@@ -1189,6 +1189,51 @@ def test_a_region_watcher_ignores_a_stray_word():
     assert "first line" in seen[0]
 
 
+
+def test_a_sidebar_is_dropped_before_the_conversation():
+    """An Electron app renders its menu and its content in one region.
+
+    Scoping to a document does not separate them, because there is only one
+    document. What separates them is shape: the furniture is a long run of
+    fragments and the content starts at the first real sentence. Measured on
+    the Claude desktop app, 301 short lines came before the conversation.
+    """
+    from executive_reader.capture import uia
+
+    chrome = [u"Resize sidebar", u"New", u"Artifacts", u"Customize", u"Pinned",
+              u"More options", u"Projects", u"Recents", u"Settings", u"Help"]
+    body = ["This is a real sentence of the kind a conversation is made of, "
+            "long enough to count as prose rather than a label.",
+            "And a second one, also long enough to be treated as content "
+            "rather than as another menu entry in the sidebar."]
+    text = chr(10).join(chrome + body)
+    out = uia._drop_leading_chrome(text)
+    assert out.startswith("This is a real sentence"), out[:60]
+    assert "Resize sidebar" not in out
+    assert "second one" in out
+
+
+def test_a_short_opening_line_is_not_mistaken_for_a_sidebar():
+    """A headline, a byline, then the article. Dropping those would be worse
+    than reading a menu, so the run has to be long before it counts."""
+    from executive_reader.capture import uia
+
+    text = chr(10).join([
+        "A Headline",
+        "By Someone",
+        "This is the opening paragraph of the article and it is comfortably "
+        "long enough to be recognised as prose."])
+    assert uia._drop_leading_chrome(text).startswith("A Headline")
+
+
+def test_text_with_no_prose_is_left_alone():
+    """A window that is genuinely all short lines must not come back empty."""
+    from executive_reader.capture import uia
+
+    text = chr(10).join(["One", "Two", "Three", "Four", "Five",
+                         "Six", "Seven", "Eight", "Nine", "Ten"])
+    assert uia._drop_leading_chrome(text) == text
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

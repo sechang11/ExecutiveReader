@@ -41,6 +41,12 @@ def voices_dir() -> Path:
 class Config:
     # --- voice ---
     engine: str = "sapi"            # sapi | kokoro | piper
+    #: False until the user picks a voice themselves. While it is False the
+    #: app upgrades to a neural voice as soon as one is installed, because
+    #: the shipped default is a Windows system voice and someone who has just
+    #: downloaded 310 MB of neural voices did not mean to keep listening to
+    #: Microsoft David.
+    voice_chosen: bool = False
     voice: str = ""                 # engine-specific voice id; blank = engine default
     speed: float = 1.0              # 0.5 .. 4.0, applied at synthesis time
     volume: float = 1.0             # 0.0 .. 1.0

@@ -60,6 +60,7 @@ class App:
         self.config = config or Config.load()
         self.store = store or Store()
         self.registry = Registry()
+        self._prefer_best_voice()
         self.dictionary = Dictionary(self.store.rules())
         self.reader = Reader(self.registry, self.config, self.dictionary)
 
@@ -185,6 +186,32 @@ class App:
             self.reader.set_voice(engine, voice)
         if speed:
             self.reader.set_speed(speed)
+
+    def _prefer_best_voice(self) -> None:
+        """Move to a neural voice once one exists, until the user picks.
+
+        The shipped default is a Windows system voice, because that is the one
+        that always works. Downloading the neural voices does not change it,
+        so the app went on sounding robotic after a 310 MB download, which is
+        the opposite of what the download was for.
+        """
+        if self.config.voice_chosen:
+            return
+        # Through the public listing, not the private map: a registry that is
+        # standing in for the real one during a test has the first and not the
+        # second, and reaching past the interface broke every one of them.
+        try:
+            engines = {eng.name: eng for eng in self.registry.all_engines()}
+        except Exception:
+            return
+        for name in ("kokoro", "piper"):
+            engine = engines.get(name)
+            if engine is None or not getattr(engine, "available", False):
+                continue
+            if self.config.engine != name:
+                self.config.engine = name
+                self.config.voice = engine.default_voice()
+            return
 
     # --- capture entry points -------------------------------------------
     def read_smart(self) -> None:
@@ -449,6 +476,8 @@ class App:
         self.config.save()
 
     def set_voice(self, engine: str, voice: str) -> None:
+        # An explicit choice, so stop upgrading underneath them.
+        self.config.voice_chosen = True
         self.reader.set_voice(engine, voice)
         self.config.save()
         self.on_status("Voice: " + (voice or engine))
