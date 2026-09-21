@@ -53,6 +53,8 @@ class MiniPlayer(QWidget):
     speed_changed = Signal(float)
     choose_area = Signal()
     replay = Signal(int)
+    open_item = Signal()
+    read_screen = Signal()
 
     def __init__(self) -> None:
         super().__init__(None,
@@ -79,11 +81,18 @@ class MiniPlayer(QWidget):
         self.title.setTextFormat(Qt.PlainText)
         layout.addWidget(self.title)
 
+        # A title rather than the sentence being spoken. Scrolling text here
+        # was the worst of both: too small to read and too busy to ignore.
+        # Clicking it opens the whole capture, which is where the text
+        # belongs, because checking a misread word means looking at it.
         self.sentence = QLabel("")
         self.sentence.setObjectName("sentence")
         self.sentence.setWordWrap(True)
         self.sentence.setTextFormat(Qt.PlainText)
         self.sentence.setMinimumHeight(38)
+        self.sentence.setCursor(Qt.PointingHandCursor)
+        self.sentence.setToolTip("Click to see the whole thing.")
+        self.sentence.mousePressEvent = self._title_clicked
         font = QFont()
         font.setPointSize(10)
         self.sentence.setFont(font)
@@ -101,13 +110,23 @@ class MiniPlayer(QWidget):
         self.recent.hide()
         layout.addWidget(self.recent)
 
+        buttons = QHBoxLayout()
         self.btn_area = QPushButton("Choose an area to read")
         self.btn_area.setCursor(Qt.PointingHandCursor)
         self.btn_area.setToolTip(
             "Drag a box around anything on screen. Whatever text appears "
             "inside it gets read, and each reading is kept in the list above.")
         self.btn_area.clicked.connect(self.choose_area.emit)
-        layout.addWidget(self.btn_area)
+        buttons.addWidget(self.btn_area)
+
+        self.btn_screen = QPushButton("Read the screen now")
+        self.btn_screen.setCursor(Qt.PointingHandCursor)
+        self.btn_screen.setToolTip(
+            "Read whatever is on screen right now, once, by recognising the "
+            "picture. No area needed.")
+        self.btn_screen.clicked.connect(self.read_screen.emit)
+        buttons.addWidget(self.btn_screen)
+        layout.addLayout(buttons)
 
         self.progress = QProgressBar()
         self.progress.setTextVisible(False)
@@ -159,7 +178,9 @@ class MiniPlayer(QWidget):
         self.progress.setValue(0)
 
     def set_segment(self, index: int, text: str, total: int) -> None:
-        self.sentence.setText(text)
+        # The sentence is deliberately not shown here any more. It is the
+        # progress bar and the counter that say where the reading has got to;
+        # the line above stays a title you can click.
         self.progress.setValue(int((index + 1) / total * 1000) if total else 0)
         base = self.title.text().split("  ·  ")[0]
         self.title.setText(base + "  ·  " + str(index + 1) + " of " + str(total))
@@ -188,6 +209,13 @@ class MiniPlayer(QWidget):
             self.speed.setEditable(False)
             self.speed.setCurrentIndex(SPEEDS.index(nearest))
         self.speed.blockSignals(False)
+
+    def _title_clicked(self, _event) -> None:
+        self.open_item.emit()
+
+    def set_item_title(self, title: str) -> None:
+        """Name the thing being read, instead of showing it word by word."""
+        self.sentence.setText(title)
 
     #: Ten is what fits without the player becoming a window of its own.
     RECENT_ROWS = 10

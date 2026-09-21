@@ -72,9 +72,17 @@ class TrayApp(QObject):
         # machinery and hands it the previews.
         self.player.choose_area.connect(self._choose_area)
         self.player.replay.connect(self._replay_recent)
+        self.player.open_item.connect(self._open_item)
+        self.player.read_screen.connect(lambda: self.app.read_screen(False))
         screen = getattr(self.library, "screen", None)
         if screen is not None:
             screen.captures_changed.connect(self.player.set_recent)
+            screen.now_reading.connect(self.player.set_item_title)
+
+    def _open_item(self) -> None:
+        screen = getattr(self.library, "screen", None)
+        if screen is not None:
+            screen.open_current()
 
     def _choose_area(self) -> None:
         screen = getattr(self.library, "screen", None)

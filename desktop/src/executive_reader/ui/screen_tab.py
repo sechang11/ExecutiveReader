@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QGridLayout,
                                QWidget)
 
 from ..capture import region as region_mod
+from .clipboard_window import ClipboardWindow, title_for
 from .overlay import Highlight, RegionPicker
 
 #: Most recent first, and capped: this is a live feed, not an archive. The
@@ -42,6 +43,7 @@ def _pretty(combo: str) -> str:
 class ScreenTab(QWidget):
     status = Signal(str)
     captures_changed = Signal(list)
+    now_reading = Signal(str)
 
     def __init__(self, app) -> None:
         super().__init__()
@@ -52,6 +54,9 @@ class ScreenTab(QWidget):
         self._captures: list = []
         self._rect: tuple | None = None
         self._live_capture: region_mod.Capture | None = None
+        self._window = ClipboardWindow()
+        self._window.read_from.connect(
+            lambda text: self.app.read_text(text, 'Screen area'))
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._controls())
@@ -118,6 +123,9 @@ class ScreenTab(QWidget):
         row = QHBoxLayout()
 
         self.btn_pick = QPushButton("Choose an area to watch")
+        self.btn_pick.setToolTip(
+            "Drag a new rectangle. Choosing again is also how the area is "
+            "resized: the old one is replaced by what you drag.")
         self.btn_pick.setMinimumHeight(40)
         self.btn_pick.clicked.connect(self.choose_area)
         row.addWidget(self.btn_pick)
@@ -131,6 +139,13 @@ class ScreenTab(QWidget):
             "selection, the clipboard or the whole screen.")
         self.btn_now.clicked.connect(self.read_area_now)
         row.addWidget(self.btn_now)
+
+        self.btn_clear = QPushButton("Forget the area")
+        self.btn_clear.setMinimumHeight(40)
+        self.btn_clear.setEnabled(False)
+        self.btn_clear.setToolTip("Stop watching and forget the rectangle.")
+        self.btn_clear.clicked.connect(self.clear_area)
+        row.addWidget(self.btn_clear)
 
         self.btn_stop = QPushButton("Stop watching")
         self.btn_stop.setMinimumHeight(40)
@@ -177,10 +192,9 @@ class ScreenTab(QWidget):
         self._watcher = watcher
         self.btn_stop.setEnabled(True)
         self.btn_now.setEnabled(True)
+        self.btn_clear.setEnabled(True)
         self.status.emit("Watching that area. It reads new text by itself; "
                          "use Read the area now to hear it again.")
-        if self.chk_highlight.isChecked():
-            self._highlight.show_words([], self._rect)
 
     def stop_watching(self, quiet: bool = False) -> None:
         if self._watcher is not None:
@@ -211,6 +225,21 @@ class ScreenTab(QWidget):
             self.status.emit("No text recognised in that area.")
             return
         self._add_capture(capture)
+
+    def clear_area(self) -> None:
+        """Forget the rectangle entirely.
+
+        Separate from stopping, because stopping keeps the area so it can be
+        started again; this is the way out when the rectangle is in the wrong
+        place and you want it gone rather than adjusted.
+        """
+        self.stop_watching(quiet=True)
+        self._rect = None
+        self._live_capture = None
+        self.btn_now.setEnabled(False)
+        self.btn_clear.setEnabled(False)
+        self.lbl_area.setText("No area chosen.")
+        self.status.emit("Area forgotten.")
 
     # --- captures --------------------------------------------------------
     def _captured(self, capture) -> None:
@@ -269,22 +298,29 @@ class ScreenTab(QWidget):
 
     def _speak(self, capture) -> None:
         self._live_capture = capture
+        self.now_reading.emit(title_for(capture))
         self.app.read_text(capture.text, "Screen area")
+
+    def open_current(self) -> None:
+        """Show the whole of whatever is being read."""
+        if self._live_capture is None:
+            self.status.emit("Nothing captured yet.")
+            return
+        self._window.show_capture(self._live_capture)
 
     # --- highlight -------------------------------------------------------
     def _highlight_toggled(self) -> None:
         if not self.chk_highlight.isChecked():
             self._highlight.clear()
-        elif self._watcher is not None:
-            self._highlight.show_words([], self._rect)
 
     def on_segment(self, sentence: str) -> None:
         """Mark the sentence being spoken, when it came from the screen area."""
         if not self.chk_highlight.isChecked() or self._live_capture is None:
             return
         words = region_mod.words_for(self._live_capture, sentence)
-        self._highlight.show_words(words, self._rect)
+        self._highlight.show_words(words)
 
     def shutdown(self) -> None:
         self.stop_watching(quiet=True)
         self._highlight.close()
+        self._window.close()

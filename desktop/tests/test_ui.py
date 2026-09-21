@@ -128,7 +128,16 @@ def test_the_mini_player_reflects_state_without_a_document():
         player.set_document("A Title", 12)
         player.set_segment(0, "First sentence.", 12)
         assert "1 of 12" in player.title.text(), player.title.text()
-        assert player.sentence.text() == "First sentence."
+        # The line under the title is a name you can click, not the sentence
+        # being spoken: scrolling text there was too small to read and too
+        # busy to ignore. Progress is carried by the counter and the bar.
+        player.set_item_title("A captured passage")
+        player.set_segment(1, "Second sentence.", 12)
+        assert player.sentence.text() == "A captured passage", player.sentence.text()
+        opened = []
+        player.open_item.connect(lambda: opened.append(True))
+        player._title_clicked(None)
+        assert opened == [True], "clicking the title opened nothing"
         assert player.progress.value() > 0
 
         # The speed readout is a picker now, not a label: changing it must
@@ -158,6 +167,61 @@ def test_icons_render_at_every_size_they_are_asked_for():
         assert not speaker_icon(size, active=False).isNull()
     for kind in ("play", "pause", "stop", "next", "prev"):
         assert not glyph_icon(kind).isNull(), kind
+
+
+
+def test_a_capture_gets_a_title_from_its_own_first_line():
+    """Recognition has no title to offer, so the text supplies one.
+
+    It has to be short enough for the player and long enough to tell two
+    captures apart, and it must not end mid-word.
+    """
+    from executive_reader.ui.clipboard_window import title_for
+
+    class Shot:
+        def __init__(self, text):
+            self.text = text
+
+    assert title_for(Shot("Short line.")) == "Short line."
+    long_title = title_for(Shot(
+        "This opening line is considerably longer than the space a small "
+        "player has for it, so it must be cut."))
+    assert len(long_title) <= 56, long_title
+    assert long_title.endswith("..."), long_title
+    assert not long_title[:-3].endswith(" "), long_title
+    assert title_for(Shot("   ")) == "Empty capture"
+    # The first non-empty line, not the first line.
+    assert title_for(Shot(chr(10) + chr(10) + "Real first line.")) == "Real first line."
+
+
+def test_the_capture_window_reads_from_where_you_clicked():
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.ui.clipboard_window import ClipboardWindow
+
+    class Shot:
+        text = ("First sentence here. Second sentence here. "
+                "Third sentence here.")
+        when = 0
+        words: list = []
+
+    window = ClipboardWindow()
+    asked = []
+    window.read_from.connect(asked.append)
+    try:
+        window.show_capture(Shot())
+        window.hide()
+        cursor = window.body.textCursor()
+        cursor.setPosition(Shot.text.index("Second"))
+        window.body.setTextCursor(cursor)
+        window._read_from_cursor()
+        assert asked and asked[0].startswith("Second sentence"), asked
+        # Reading all of it is the whole capture, not the tail.
+        window._read_all()
+        assert asked[-1].startswith("First sentence"), asked[-1]
+    finally:
+        window.close()
 
 
 # --- the command line ----------------------------------------------------
