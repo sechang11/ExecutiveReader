@@ -21,7 +21,7 @@ than a later one.
 
 | Label | Condition | Certainty |
 |---|---|---|
-| `exact` | The saved quote appears **once**, character for character | The position is right |
+| `exact` | The saved quote appears **once**, word for word | The position is right |
 | `ambiguous` | The quote appears **more than once**; neighbours chose which | The sentence is right, the copy is a judgment |
 | `boundary` | No whole-sentence match, but the quote contains a current sentence or is contained by one | The text is right, the sentence edges moved |
 | `fuzzy` | No containment; the best similarity score clears the acceptance threshold | Probably the right place |
@@ -32,6 +32,23 @@ than a later one.
 Exactly one sentence equals the quote. Say nothing to the user, whatever the rule
 fingerprint says: if the sentence is present word for word, the position is
 correct, and the fingerprint records provenance rather than correctness.
+
+**Word for word, not character for character.** Decided by the user on
+2026-09-21, after the two halves implemented opposite readings of this section
+and neither could settle it: the table above said one thing and this paragraph
+said the other, and a sentence that comes back recapitalised satisfies exactly
+one of them.
+
+The reason is what the label is for. `exact` means *say nothing*, so choosing
+character equality would make the reader announce a guess about a position that
+is certainly right — a page re-extracted with a heading recased, a typographic
+quote substituted, a non-breaking space where a space was. The cost of the
+choice is that a wholesale recapitalisation and a genuine edit look alike here,
+which is a real loss and the smaller one.
+
+Comparison is on words: whitespace collapsed, case folded, punctuation stripped.
+That is the desktop half's existing behaviour, so the extension is the side that
+changes.
 
 ### ambiguous
 

@@ -166,9 +166,22 @@ const read = (rel) => {
 };
 
 /** Whether the vocabulary still contains both of its incompatible definitions. */
-function bothDefinitionsStillPresent() {
-  const doc = read('docs/anchor-vocabulary.md');
-  return doc.includes('character for character') && doc.includes('word for word');
+/**
+ * Does the vocabulary's summary table still define `exact` as word for word?
+ *
+ * Reads the table row rather than searching the whole document. Its predecessor
+ * asked whether both phrasings appeared anywhere, and the edit that resolved
+ * the contradiction also used the rejected phrase while explaining what had
+ * been rejected: both were present, the premise held, and nothing fired on the
+ * one day it existed for. A phrase match across prose cannot tell a definition
+ * from a mention of one.
+ */
+function tableDefinesExactAsWordForWord() {
+  const row = read('docs/anchor-vocabulary.md')
+    .split('\n')
+    .find((line) => line.startsWith('| `exact` |'));
+  return Boolean(row) && row.includes('word for word')
+    && !row.includes('character for character');
 }
 
 const KNOWN = new Map([
@@ -204,35 +217,48 @@ const KNOWN = new Map([
     },
   }],
 
-  // These two are the real question, and the vocabulary answers it twice.
-  // The summary table calls exact "character for character"; the section below
-  // it says "if the sentence is present word for word, the position is
-  // correct". A sentence that differs only in capitalisation satisfies one and
-  // not the other, which is the whole of the disagreement.
+  // RESOLVED by the user on 2026-09-21: `exact` means word for word.
   //
-  // docs/anchor-vocabulary.md says neither half changes the contract alone, so
-  // this goes to the user rather than to whichever of us edits first.
+  // These two stopped being a shared open question that day and became the
+  // extension's deviation. It compares raw strings; the decision is that
+  // comparison is on words, with whitespace collapsed, case folded and
+  // punctuation stripped, which is the desktop half's existing behaviour. So
+  // the extension is the side that changes and these entries are its migration,
+  // in the same shape as the bracketed-footnote one the desktop half carried.
   //
-  // The premise is the contradiction itself, not either reading of it. The day
-  // the user resolves it, one of these phrases leaves the document and this
-  // fails — which is the point, because that is exactly the day these two
-  // entries stop being a shared open question and become one half's bug.
+  // The reason, kept here because an entry that outlives the argument is how
+  // the last one went stale: `exact` means say nothing to the user. Character
+  // equality would announce a guess about a position that is certainly right,
+  // every time a page is re-extracted with a heading recased.
+  //
+  // The premise is now the decision rather than the contradiction, and it goes
+  // the other way: these are tolerable only while the document still says word
+  // for word. Reopen the question and this fails, which is right, because then
+  // they are not a migration any more.
+  //
+  // A caution earned the hard way. The previous premise asked whether both
+  // phrasings still appeared anywhere in the document, and the edit that
+  // resolved the contradiction ALSO used the words "character for character"
+  // while explaining what had been rejected. Both phrases were present, the
+  // premise held, and nothing fired on the day it was supposed to. Matching a
+  // phrase across a whole prose file cannot tell a definition from a mention of
+  // one, which is the same failure as matching source text instead of calling
+  // the behaviour. This one reads the table row.
   ['case: sentence recapitalised', {
     python: 'exact',
     js: 'fuzzy',
     premise: {
-      describe: 'anchor-vocabulary.md still defines exact twice and differently'
-        + ' — "character for character" in the table, "word for word" in the'
-        + ' section below it — so neither half is deviating from a clear rule',
-      holds: bothDefinitionsStillPresent,
+      describe: 'the vocabulary table still defines exact as word for word, so '
+        + 'these remain the extension\'s migration rather than an open question',
+      holds: tableDefinesExactAsWordForWord,
     },
   }],
   ['case: one word recapitalised', {
     python: 'exact',
     js: 'fuzzy',
     premise: {
-      describe: 'as above: the vocabulary still answers this twice',
-      holds: bothDefinitionsStillPresent,
+      describe: 'as above: the decision still stands in the table',
+      holds: tableDefinesExactAsWordForWord,
     },
   }],
 ]);
