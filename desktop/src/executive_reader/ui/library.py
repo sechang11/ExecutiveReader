@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox,
                                QSpinBox, QTableWidget, QTableWidgetItem,
                                QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
+from .screen_tab import ScreenTab
 from ..textproc import shared_rules
 from ..textproc.pronounce import Rule
 from ..tts.base import EngineError
@@ -38,6 +39,12 @@ class Library(QMainWindow):
         self.resize(860, 620)
 
         tabs = QTabWidget()
+        # First, because it is the tab that answers "how do I make it read
+        # something". The shortcuts are on the buttons rather than in a table
+        # somewhere, so they get learned by use.
+        self.screen = ScreenTab(app)
+        self.screen.status.connect(lambda message: app.on_status(message))
+        tabs.addTab(self.screen, "Screen")
         tabs.addTab(self._history_tab(), "History")
         tabs.addTab(self._bookmarks_tab(), "Bookmarks")
         tabs.addTab(self._voices_tab(), "Voices")

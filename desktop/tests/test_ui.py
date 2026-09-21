@@ -82,7 +82,7 @@ def test_the_tray_app_builds_and_shuts_down_cleanly():
             for action in actions:
                 if not action.isSeparator():
                     assert action.text(), "a menu entry has no label"
-            assert tray.library.centralWidget().count() == 5, "five tabs expected"
+            assert tray.library.centralWidget().count() == 6, "six tabs expected"
         finally:
             tray.hotkeys.stop()
             app.shutdown()

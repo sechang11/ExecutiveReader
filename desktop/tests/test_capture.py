@@ -1082,6 +1082,113 @@ def test_stopping_a_watcher_waits_for_it():
         uia_mod.capture = saved
 
 
+
+def _capture(text, words=None):
+    from executive_reader.capture import region as region_mod
+    made = []
+    left = 0
+    for raw in (words if words is not None else text.split()):
+        made.append(region_mod.Word(text=raw, left=left, top=10,
+                                    width=8 * len(raw), height=14))
+        left += 8 * len(raw) + 6
+    return region_mod.Capture(text=text, words=made)
+
+
+def test_highlight_finds_the_words_of_a_sentence_after_normalisation():
+    """The sentence has been rewritten by the time it is spoken.
+
+    Punctuation is changed, abbreviations are expanded and whitespace is
+    collapsed before anything reaches the voice, so matching the words as
+    written would find nothing. Matching on letters alone is what makes the
+    highlight land on the right words.
+    """
+    from executive_reader.capture import region as region_mod
+
+    shot = _capture('The cat "sat" down, quietly.')
+    hits = region_mod.words_for(shot, "The cat sat down quietly")
+    assert [w.text for w in hits] == ['The', 'cat', '"sat"', 'down,', 'quietly.'], \
+        [w.text for w in hits]
+    assert hits[0].left < hits[-1].left, "boxes came back out of order"
+
+
+def test_highlight_stays_dark_when_the_sentence_is_not_on_screen():
+    """Better no highlight than one drawn over unrelated words."""
+    from executive_reader.capture import region as region_mod
+
+    shot = _capture("Something else entirely on the screen right now")
+    assert region_mod.words_for(shot, "A sentence that is not here at all") == []
+    assert region_mod.words_for(shot, "") == []
+
+
+def test_a_region_watcher_reports_only_genuinely_new_text():
+    """Recognition is not deterministic at the edges.
+
+    Comparing raw text reports a change every couple of seconds on a screen
+    that has not moved, so the watcher would interrupt itself forever.
+    Comparing the letters alone does not.
+    """
+    from executive_reader.capture import region as region_mod
+
+    pages = ["Hello there, this is the text on screen.",
+             "Hello there , this is  the text on screen.",   # same, respaced
+             "Hello there, this is the text on screen!",      # same, repunctuated
+             "A completely different sentence has appeared now."]
+    state = {"i": 0}
+
+    def fake_read(_rect):
+        i = min(state["i"], len(pages) - 1)
+        state["i"] += 1
+        return _capture(pages[i])
+
+    seen = []
+    saved = region_mod.read_region
+    watcher = region_mod.RegionWatcher((0, 0, 100, 100),
+                                       on_capture=lambda c: seen.append(c.text),
+                                       interval=0.05, min_chars=10)
+    try:
+        region_mod.read_region = fake_read
+        watcher.start()
+        deadline = time.time() + 6
+        while time.time() < deadline and len(seen) < 2:
+            time.sleep(0.05)
+    finally:
+        watcher.stop()
+        region_mod.read_region = saved
+
+    assert len(seen) == 2, seen
+    assert "Hello there" in seen[0]
+    assert "completely different" in seen[1]
+
+
+def test_a_region_watcher_ignores_a_stray_word():
+    """A misread edge or a single word is not worth interrupting for."""
+    from executive_reader.capture import region as region_mod
+
+    pages = ["A long enough first line of text to be read aloud.", "ok"]
+    state = {"i": 0}
+
+    def fake_read(_rect):
+        i = min(state["i"], len(pages) - 1)
+        state["i"] += 1
+        return _capture(pages[i])
+
+    seen = []
+    saved = region_mod.read_region
+    watcher = region_mod.RegionWatcher((0, 0, 100, 100),
+                                       on_capture=lambda c: seen.append(c.text),
+                                       interval=0.05)
+    try:
+        region_mod.read_region = fake_read
+        watcher.start()
+        time.sleep(0.5)
+    finally:
+        watcher.stop()
+        region_mod.read_region = saved
+
+    assert len(seen) == 1, seen
+    assert "first line" in seen[0]
+
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

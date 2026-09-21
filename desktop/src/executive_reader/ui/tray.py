@@ -179,6 +179,11 @@ class TrayApp(QObject):
     @Slot(int, str, int)
     def _on_segment(self, index: int, text: str, total: int) -> None:
         self.player.set_segment(index, text, total)
+        # The Screen tab draws over the words when they came from a watched
+        # area. It is the only route that knows where the text is on screen.
+        screen = getattr(self.library, "screen", None)
+        if screen is not None:
+            screen.on_segment(text)
 
     @Slot(str, int)
     def _on_document(self, title: str, total: int) -> None:
@@ -208,6 +213,9 @@ class TrayApp(QObject):
                 "Open it in its app, then press the read shortcut.")
 
     def quit(self) -> None:
+        screen = getattr(self.library, "screen", None)
+        if screen is not None:
+            screen.shutdown()
         try:
             self.hotkeys.stop()
             self.app.shutdown()
