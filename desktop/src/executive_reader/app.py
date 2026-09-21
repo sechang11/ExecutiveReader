@@ -22,6 +22,11 @@ from .textproc.pronounce import Dictionary
 from .tts.registry import Registry
 
 
+#: The title a voice sample is read under. Named so the finish handler can
+#: tell a preview from anything the user actually asked to hear.
+PREVIEW_TITLE = "Voice preview"
+
+
 def _noop(*_a, **_k) -> None:
     pass
 
@@ -80,6 +85,7 @@ class App:
         self._watch_lock = threading.Lock()
         self._watch_pending: list[str] = []
         self._watch_title = ""
+        self._voice_before_preview: tuple | None = None
         self._doc: Document | None = None
         self._segment_started = 0.0
         self._save_lock = threading.Lock()
@@ -112,6 +118,8 @@ class App:
         self._persist(self.reader.total, 0.0, finished=True)
         self.on_status("Finished reading.")
         self.on_state(IDLE)
+        if self._doc is not None and self._doc.title == PREVIEW_TITLE:
+            self._restore_voice_after_preview()
         # Anything the watcher queued while this was speaking goes now.
         self._flush_watched()
 
@@ -474,6 +482,27 @@ class App:
         speed = self.reader.nudge_speed(-0.25)
         self.on_status("Speed " + ("%.2f" % speed).rstrip("0").rstrip(".") + "x")
         self.config.save()
+
+    def preview_voice(self, engine: str, voice: str) -> None:
+        """Try a voice without adopting it.
+
+        Previewing used to reach straight into the reader, which writes the
+        voice into the config, so listening to a voice you decided against
+        made it your default the moment the app next saved. The previous
+        choice is put back when the sample finishes.
+        """
+        self._voice_before_preview = (self.config.engine, self.config.voice)
+        self.reader.set_voice(engine, voice)
+        self.read_text("This is how this voice sounds at your current speed.",
+                       PREVIEW_TITLE)
+
+    def _restore_voice_after_preview(self) -> None:
+        pair = self._voice_before_preview
+        self._voice_before_preview = None
+        if pair is None:
+            return
+        engine, voice = pair
+        self.reader.set_voice(engine, voice)
 
     def set_voice(self, engine: str, voice: str) -> None:
         # An explicit choice, so stop upgrading underneath them.

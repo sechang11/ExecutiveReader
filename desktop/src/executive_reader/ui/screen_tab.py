@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import time
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QGridLayout,
                                QGroupBox, QHBoxLayout, QLabel, QListWidget,
                                QListWidgetItem, QPushButton, QVBoxLayout,
@@ -55,6 +55,10 @@ class ScreenTab(QWidget):
         self._rect: tuple | None = None
         self._live_capture: region_mod.Capture | None = None
         self._window = ClipboardWindow()
+        self._word_timer = QTimer(self)
+        self._word_timer.setSingleShot(True)
+        self._word_timer.timeout.connect(self._next_word)
+        self._word_queue: list = []
         self._window.read_from.connect(
             lambda text: self.app.read_text(text, 'Screen area'))
 
@@ -128,6 +132,11 @@ class ScreenTab(QWidget):
             "resized: the old one is replaced by what you drag.")
         self.btn_pick.setMinimumHeight(40)
         self.btn_pick.clicked.connect(self.choose_area)
+        # Hovering shows the rectangle. It is the only way to see where the
+        # area is now that the outline no longer sits on screen, and it costs
+        # nothing to look.
+        self.btn_pick.enterEvent = self._peek_area
+        self.btn_pick.leaveEvent = self._unpeek_area
         row.addWidget(self.btn_pick)
 
         self.btn_now = QPushButton("Read the area now")
@@ -175,6 +184,14 @@ class ScreenTab(QWidget):
         self._picker.cancelled.connect(lambda: self.status.emit("Cancelled."))
         self._picker.show()
         self._picker.activateWindow()
+
+    def _peek_area(self, _event) -> None:
+        if self._rect:
+            self._highlight.show_words([], self._rect)
+
+    def _unpeek_area(self, _event) -> None:
+        if not self._word_queue:
+            self._highlight.clear()
 
     def _area_chosen(self, rect: tuple) -> None:
         self._rect = rect
@@ -314,11 +331,44 @@ class ScreenTab(QWidget):
             self._highlight.clear()
 
     def on_segment(self, sentence: str) -> None:
-        """Mark the sentence being spoken, when it came from the screen area."""
+        """Mark the sentence being spoken, one word at a time.
+
+        Lighting the whole sentence says where the reader is to within a few
+        seconds, which is not much help on a paragraph. Stepping word by word
+        follows the voice.
+
+        The timing is shared out by length rather than measured, because
+        nothing reports when a particular word is spoken: the player knows how
+        long the sentence takes, and a longer word takes proportionally
+        longer to say. It drifts within a sentence and is corrected at every
+        sentence boundary, which is close enough to follow with your eyes.
+        """
+        self._word_timer.stop()
+        self._word_queue = []
         if not self.chk_highlight.isChecked() or self._live_capture is None:
             return
         words = region_mod.words_for(self._live_capture, sentence)
-        self._highlight.show_words(words)
+        if not words:
+            self._highlight.clear()
+            return
+
+        seconds = float(getattr(self.app.reader, "segment_seconds", 0.0) or 0.0)
+        if seconds <= 0:
+            self._highlight.show_words(words)
+            return
+        total = sum(max(1, len(w.text)) for w in words)
+        self._word_queue = [
+            (word, max(40, int(seconds * 1000 * max(1, len(word.text)) / total)))
+            for word in words]
+        self._next_word()
+
+    def _next_word(self) -> None:
+        if not self._word_queue:
+            return
+        word, milliseconds = self._word_queue.pop(0)
+        self._highlight.show_words([word])
+        if self._word_queue:
+            self._word_timer.start(milliseconds)
 
     def shutdown(self) -> None:
         self.stop_watching(quiet=True)

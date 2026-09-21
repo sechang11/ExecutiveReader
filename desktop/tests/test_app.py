@@ -570,6 +570,42 @@ def test_replies_arriving_together_are_read_as_one_document():
         "replies were reordered: " + repr(body))
 
 
+
+def test_previewing_a_voice_does_not_adopt_it():
+    """Listening to a voice and rejecting it used to make it the default.
+
+    The preview reached into the reader, and the reader writes the voice into
+    the config, so the next save recorded whatever was auditioned last.
+    """
+    with temp_app() as app:
+        app.config.engine, app.config.voice = "sapi", "Original Voice"
+        finished = threading.Event()
+        real_finished = app.reader.on_finished
+        app.reader.on_finished = lambda: (real_finished(), finished.set())
+
+        app.preview_voice("stub", "some-other-voice")
+        assert finished.wait(10), "the preview never finished"
+        assert (app.config.engine, app.config.voice) == ("sapi", "Original Voice"),             (app.config.engine, app.config.voice)
+
+
+def test_choosing_a_voice_does_adopt_it_and_is_remembered():
+    with temp_app() as app:
+        app.set_voice("stub", "chosen-voice")
+        assert app.config.voice == "chosen-voice", app.config.voice
+        assert app.config.voice_chosen is True
+        # And a later upgrade pass must not move it back.
+        app._prefer_best_voice()
+        assert app.config.voice == "chosen-voice", app.config.voice
+
+
+def test_the_reader_reports_how_long_a_sentence_takes():
+    """The screen highlight steps word by word and nothing else knows this:
+    the text gives no clue, because speed and voice both change the answer."""
+    with temp_app() as app:
+        app.read(DOC)
+        assert _wait(lambda: app.reader.segment_seconds > 0), "no duration reported"
+        assert app.reader.segment_seconds < 5, app.reader.segment_seconds
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

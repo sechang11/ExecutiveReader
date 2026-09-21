@@ -265,10 +265,10 @@ class Library(QMainWindow):
             return
         engine, voice = data
         try:
-            self.app.reader.set_voice(engine, voice)
-            self.app.read_text(
-                "This is how this voice sounds at your current speed.",
-                "Voice preview")
+            # Through the app, which puts the previous voice back afterwards.
+            # Reaching into the reader writes the voice into the config, so a
+            # voice you listened to and rejected became your default.
+            self.app.preview_voice(engine, voice)
         except EngineError as exc:
             QMessageBox.warning(self, "Voice unavailable", str(exc))
 

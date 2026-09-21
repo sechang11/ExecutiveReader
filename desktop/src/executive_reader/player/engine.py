@@ -39,6 +39,7 @@ class Reader:
         self.doc: Document | None = None
         self.segments: list[str] = []
         self.index = 0
+        self.segment_seconds = 0.0
         self.state = IDLE
 
         # Callbacks are replaced by the app layer; defaults keep tests quiet.
@@ -349,6 +350,10 @@ class Reader:
                     self.index += 1
                 continue
 
+            # How long this sentence takes to say. The screen highlight needs
+            # it to step word by word, and only the player knows: the text
+            # gives no clue, since speed and voice both change the answer.
+            self.segment_seconds = (len(samples) / float(rate)) if rate else 0.0
             if start_frame == 0:
                 self.on_segment(idx, self.segments[idx] if idx < total else "", total)
 
