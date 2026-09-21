@@ -1234,6 +1234,84 @@ def test_text_with_no_prose_is_left_alone():
                          "Six", "Seven", "Eight", "Nine", "Ten"])
     assert uia._drop_leading_chrome(text) == text
 
+
+def test_scrolling_continues_the_same_capture():
+    """Scrolling a page being read must not start a near-copy of it.
+
+    The lines that were at the bottom are at the top after a scroll, so a
+    fresh capture repeats most of what was just read and the reading starts
+    again from text already heard.
+    """
+    from executive_reader.capture import region as region_mod
+
+    nl = chr(10)
+    before = nl.join(["First line of the page.", "Second line.", "Third line."])
+    after = nl.join(["Second line.", "Third line.", "Fourth line.", "Fifth line."])
+    tail = region_mod.continuation(before, after)
+    assert tail == "Fourth line." + nl + "Fifth line.", repr(tail)
+
+
+def test_an_unchanged_screen_continues_with_nothing():
+    from executive_reader.capture import region as region_mod
+    nl = chr(10)
+    same = nl.join(["One line.", "Another line."])
+    assert region_mod.continuation(same, same) == ""
+
+
+def test_unrelated_text_is_a_new_capture_not_a_continuation():
+    """Pointing the area somewhere else is a different thing to read."""
+    from executive_reader.capture import region as region_mod
+    nl = chr(10)
+    assert region_mod.continuation("One." + nl + "Two.", "Apples." + nl + "Pears.") is None
+
+
+def test_a_neural_voice_is_not_pushed_past_the_speed_it_handles():
+    """Its speed input saturates, and slurs what it does deliver.
+
+    Measured on Kokoro: 2.0 came back as 1.78 and 3.0 as 2.09, unevenly
+    squashed. So the model is asked for a speed inside its range and the rest
+    is taken out of the waveform, which keeps the pitch where it is.
+    """
+    from executive_reader.tts.kokoro_engine import KokoroEngine
+    from executive_reader.tts.piper_engine import PiperEngine
+
+    for engine in (KokoroEngine, PiperEngine):
+        limit = getattr(engine, "native_speed_limit", 0)
+        assert 1.0 < limit <= 2.0, (engine.__name__, limit)
+        assert limit < engine.max_speed, (engine.__name__, limit, engine.max_speed)
+
+
+def test_speeding_up_audio_does_not_move_its_pitch():
+    """Resampling is the obvious way and it transposes the voice.
+
+    Overlapping and adding windows removes time instead, which is what a
+    listener wants from a speed control.
+    """
+    import numpy as np
+    from executive_reader.player.stretch import time_stretch
+
+    rate = 24000
+    t = np.arange(rate) / rate
+    tone = (np.sin(2 * np.pi * 120 * t) + 0.5 * np.sin(2 * np.pi * 240 * t))
+    tone = tone.astype(np.float32) * 0.3
+
+    def pitch(x):
+        x = x - x.mean()
+        n = min(8000, len(x))
+        ac = np.correlate(x[:n], x[:n], "full")[n - 1:]
+        ac[:40] = 0
+        return rate / float(np.argmax(ac[:400]))
+
+    for speed in (1.5, 2.0, 3.0):
+        out = time_stretch(tone, rate, speed)
+        ratio = len(tone) / len(out)
+        assert abs(ratio - speed) / speed < 0.08, (speed, ratio)
+        assert abs(pitch(out) - pitch(tone)) < 3.0, (speed, pitch(out))
+
+    # A speed of one must not rebuild the audio at all.
+    same = time_stretch(tone, rate, 1.0)
+    assert len(same) == len(tone)
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

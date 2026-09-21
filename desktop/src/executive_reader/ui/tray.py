@@ -67,6 +67,24 @@ class TrayApp(QObject):
             self.player.place_bottom_right()
         self.player.set_speed(app.config.speed)
         self.player.speed_changed.connect(self._speed_changed)
+        # The area picker and the recent list live on the player because that
+        # is the window that is actually on screen; the Screen tab owns the
+        # machinery and hands it the previews.
+        self.player.choose_area.connect(self._choose_area)
+        self.player.replay.connect(self._replay_recent)
+        screen = getattr(self.library, "screen", None)
+        if screen is not None:
+            screen.captures_changed.connect(self.player.set_recent)
+
+    def _choose_area(self) -> None:
+        screen = getattr(self.library, "screen", None)
+        if screen is not None:
+            screen.choose_area()
+
+    def _replay_recent(self, index: int) -> None:
+        screen = getattr(self.library, "screen", None)
+        if screen is not None:
+            screen.replay(index)
 
     def _speed_changed(self, speed: float) -> None:
         self.app.set_speed(speed)

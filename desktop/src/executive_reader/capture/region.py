@@ -48,6 +48,9 @@ class Capture:
     text: str
     when: float = field(default_factory=time.time)
     words: list = field(default_factory=list)
+    #: True when this carries on from the capture before it, which happens
+    #: whenever the page is scrolled while it is being read.
+    continues: bool = False
 
     @property
     def preview(self) -> str:
@@ -101,6 +104,33 @@ def _key(text: str) -> str:
     return "".join(ch for ch in text.lower() if ch.isalnum())
 
 
+def continuation(previous: str, current: str) -> str | None:
+    """The part of `current` that carries on from `previous`, if it does.
+
+    Scrolling a page the reader is already working through produces a capture
+    that overlaps the last one: the lines that were at the bottom are now at
+    the top. Treated as a fresh capture that becomes a new row saying mostly
+    what the previous row already said, and the reading restarts from text you
+    have already heard.
+
+    Recognised by the overlap itself. If any run of lines at the end of the
+    previous capture appears at the start of this one, the rest is new and
+    belongs on the end of what is already there. Returns None when the two
+    share nothing, which is a genuinely different thing to read.
+    """
+    old_lines = [line for line in (previous or "").splitlines() if line.strip()]
+    new_lines = [line for line in (current or "").splitlines() if line.strip()]
+    if not old_lines or not new_lines:
+        return None
+    limit = min(len(old_lines), len(new_lines))
+    # Longest overlap first: a short one is more likely to be a coincidence.
+    for size in range(limit, 0, -1):
+        if old_lines[-size:] == new_lines[:size]:
+            rest = new_lines[size:]
+            return chr(10).join(rest) if rest else ""
+    return None
+
+
 class RegionWatcher:
     """Recognise a rectangle on a timer and report genuinely new text."""
 
@@ -115,6 +145,7 @@ class RegionWatcher:
         self.on_error: Callable[[str], None] = lambda _m: None
 
         self._last_key = ""
+        self._last_text = ""
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -144,6 +175,16 @@ class RegionWatcher:
                 key = _key(shot.text)
                 if key and key != self._last_key and len(shot.text) >= self.min_chars:
                     self._last_key = key
+                    # A scroll continues the last capture rather than starting
+                    # a new one, so the rows stay one row per thing read.
+                    tail = continuation(self._last_text, shot.text)
+                    self._last_text = shot.text
+                    if tail is not None:
+                        if tail.strip():
+                            shot.continues = True
+                            shot.text = tail
+                            self.on_capture(shot)
+                        continue
                     self.on_capture(shot)
             except ocr.OCRUnavailable as exc:
                 self.on_error(str(exc))

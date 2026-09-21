@@ -49,6 +49,11 @@ _MISSING_RUNTIME = "onnxruntime is not installed. Run: pip install onnxruntime"
 class PiperEngine(Engine):
     name = "piper"
     max_speed = 4.0
+    #: Past this the model returns less speed than it is asked for and
+    #: slurs what it does return, so the player takes the remainder out
+    #: of the audio instead. Measured, not guessed: 1.5 comes back as
+    #: 1.51, while 2.0 comes back as 1.78 and 3.0 as 2.09.
+    native_speed_limit = 1.5
 
     def __init__(self) -> None:
         self._lock = threading.Lock()

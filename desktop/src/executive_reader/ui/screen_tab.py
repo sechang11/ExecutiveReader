@@ -41,6 +41,7 @@ def _pretty(combo: str) -> str:
 
 class ScreenTab(QWidget):
     status = Signal(str)
+    captures_changed = Signal(list)
 
     def __init__(self, app) -> None:
         super().__init__()
@@ -219,6 +220,24 @@ class ScreenTab(QWidget):
         QTimer.singleShot(0, lambda: self._add_capture(capture))
 
     def _add_capture(self, capture) -> None:
+        # A scroll extends the row already there instead of adding a near-copy
+        # of it. Without this, scrolling a page being read produces a new row
+        # that mostly repeats the last one, and the reading starts again from
+        # text already heard.
+        if getattr(capture, "continues", False) and self._captures:
+            head = self._captures[0]
+            head.text = (head.text + chr(10) + capture.text).strip()
+            head.words = list(head.words) + list(capture.words)
+            if self.rows.count():
+                self.rows.item(0).setText(
+                    time.strftime("%H:%M:%S", time.localtime(head.when))
+                    + "   " + head.preview)
+            self._announce()
+            if self._live_capture is head:
+                # Already reading this one: queue the rest rather than
+                # restarting it from the top.
+                self.app.read_text(capture.text, "Screen area")
+            return
         self._captures.insert(0, capture)
         del self._captures[MAX_ROWS:]
         item = QListWidgetItem(time.strftime("%H:%M:%S", time.localtime(capture.when))
@@ -226,11 +245,22 @@ class ScreenTab(QWidget):
         self.rows.insertItem(0, item)
         while self.rows.count() > MAX_ROWS:
             self.rows.takeItem(self.rows.count() - 1)
+        self._announce()
 
         if self.chk_lock.isChecked() and self.app.reader.state == "playing":
             self.status.emit("New text found; locked, so it is waiting for you.")
             return
         self._speak(capture)
+
+    def replay(self, index: int) -> None:
+        """Read one of the recent captures, chosen from the player."""
+        if 0 <= index < len(self._captures):
+            self._speak(self._captures[index])
+
+    def _announce(self) -> None:
+        self.captures_changed.emit(
+            [time.strftime("%H:%M", time.localtime(c.when)) + "  " + c.preview
+             for c in self._captures])
 
     def _read_row(self, item) -> None:
         index = self.rows.row(item)

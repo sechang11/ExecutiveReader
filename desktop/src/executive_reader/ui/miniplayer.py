@@ -9,7 +9,7 @@ from __future__ import annotations
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
-                               QProgressBar,
+                               QListWidget, QProgressBar,
                                QPushButton, QVBoxLayout, QWidget)
 
 from .icons import glyph_icon
@@ -51,6 +51,8 @@ class MiniPlayer(QWidget):
     prev_segment = Signal()
     open_library = Signal()
     speed_changed = Signal(float)
+    choose_area = Signal()
+    replay = Signal(int)
 
     def __init__(self) -> None:
         super().__init__(None,
@@ -86,6 +88,26 @@ class MiniPlayer(QWidget):
         font.setPointSize(10)
         self.sentence.setFont(font)
         layout.addWidget(self.sentence)
+
+        # The recent captures, on the window that is actually on screen. The
+        # library has the full list; this is the handful worth reaching for
+        # without opening anything.
+        self.recent = QListWidget()
+        self.recent.setObjectName("recent")
+        self.recent.setMaximumHeight(96)
+        self.recent.setUniformItemSizes(True)
+        self.recent.itemClicked.connect(
+            lambda item: self.replay.emit(self.recent.row(item)))
+        self.recent.hide()
+        layout.addWidget(self.recent)
+
+        self.btn_area = QPushButton("Choose an area to read")
+        self.btn_area.setCursor(Qt.PointingHandCursor)
+        self.btn_area.setToolTip(
+            "Drag a box around anything on screen. Whatever text appears "
+            "inside it gets read, and each reading is kept in the list above.")
+        self.btn_area.clicked.connect(self.choose_area.emit)
+        layout.addWidget(self.btn_area)
 
         self.progress = QProgressBar()
         self.progress.setTextVisible(False)
@@ -166,6 +188,16 @@ class MiniPlayer(QWidget):
             self.speed.setEditable(False)
             self.speed.setCurrentIndex(SPEEDS.index(nearest))
         self.speed.blockSignals(False)
+
+    #: Ten is what fits without the player becoming a window of its own.
+    RECENT_ROWS = 10
+
+    def set_recent(self, previews: list) -> None:
+        """Show the most recent captures, newest first."""
+        self.recent.clear()
+        for line in previews[:self.RECENT_ROWS]:
+            self.recent.addItem(line)
+        self.recent.setVisible(bool(previews))
 
     def set_status(self, message: str) -> None:
         self.sentence.setText(message)

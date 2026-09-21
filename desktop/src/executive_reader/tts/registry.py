@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..player.stretch import time_stretch
 from .base import Engine, EngineError, Voice
 from .kokoro_engine import KokoroEngine
 from .piper_engine import PiperEngine
@@ -87,7 +88,22 @@ class Registry:
 
     def synthesize(self, text: str, engine: str, voice: str,
                    speed: float) -> tuple[np.ndarray, int]:
+        """Synthesize, taking any speed the voice cannot manage out of the audio.
+
+        A neural voice takes speed as a synthesis input, which is the right way
+        to do it while the number stays inside the range the model was trained
+        on. Past that it returns less speed than asked for and slurs what it
+        does return. Measured on Kokoro: 2.0 gives 1.78, 3.0 gives 2.09.
+
+        So the model is asked for as much as it handles cleanly and the rest is
+        removed from the waveform by overlap-add, which leaves the pitch where
+        it is. A system voice has no such limit and is left alone.
+        """
         eng, vid = self.resolve(engine, voice)
+        limit = getattr(eng, "native_speed_limit", 0.0) or 0.0
+        if limit and speed > limit:
+            samples, rate = eng.synthesize(text, vid, limit)
+            return time_stretch(samples, rate, speed / limit), rate
         return eng.synthesize(text, vid, speed)
 
     def max_speed(self, engine: str) -> float:
