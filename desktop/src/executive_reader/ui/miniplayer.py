@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
+from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
+                               QProgressBar,
                                QPushButton, QVBoxLayout, QWidget)
 
 from .icons import glyph_icon
@@ -33,12 +34,23 @@ QProgressBar::chunk { background: #4f8cff; border-radius: 2px; }
 """
 
 
+#: Offered on the player. Anything finer belongs in settings; these are the
+#: steps people actually listen at.
+SPEEDS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]
+
+
+def _label(value: float) -> str:
+    text = ("%.2f" % value).rstrip("0").rstrip(".")
+    return text + "x"
+
+
 class MiniPlayer(QWidget):
     play_pause = Signal()
     stop = Signal()
     next_segment = Signal()
     prev_segment = Signal()
     open_library = Signal()
+    speed_changed = Signal(float)
 
     def __init__(self) -> None:
         super().__init__(None,
@@ -90,8 +102,17 @@ class MiniPlayer(QWidget):
             row.addWidget(btn)
         row.addStretch(1)
 
-        self.speed = QLabel("1x")
+        # A control rather than a readout. The speeds are the ones people
+        # actually use for listening rather than a continuous slider nobody
+        # can hit a round number on.
+        self.speed = QComboBox()
         self.speed.setObjectName("speed")
+        self.speed.setCursor(Qt.PointingHandCursor)
+        self.speed.setFixedWidth(64)
+        for value in SPEEDS:
+            self.speed.addItem(_label(value), value)
+        self.speed.setCurrentIndex(SPEEDS.index(1.0))
+        self.speed.currentIndexChanged.connect(self._speed_picked)
         row.addWidget(self.speed)
 
         library = QPushButton("Library")
@@ -124,8 +145,27 @@ class MiniPlayer(QWidget):
     def set_state(self, state: str) -> None:
         self._btn_play.setIcon(glyph_icon("pause" if state == "playing" else "play"))
 
+    def _speed_picked(self, index: int) -> None:
+        value = self.speed.itemData(index)
+        if value is not None:
+            self.speed_changed.emit(float(value))
+
     def set_speed(self, speed: float) -> None:
-        self.speed.setText(("%.2f" % speed).rstrip("0").rstrip(".") + "x")
+        """Show the speed without re-emitting it.
+
+        The app also changes speed from the shortcuts and from a saved
+        setting, and letting that assignment fire currentIndexChanged would
+        bounce the value straight back into the reader.
+        """
+        nearest = min(SPEEDS, key=lambda value: abs(value - speed))
+        self.speed.blockSignals(True)
+        if abs(nearest - speed) < 0.01:
+            self.speed.setCurrentIndex(SPEEDS.index(nearest))
+        else:
+            # A speed the list does not offer, set from a shortcut nudge.
+            self.speed.setEditable(False)
+            self.speed.setCurrentIndex(SPEEDS.index(nearest))
+        self.speed.blockSignals(False)
 
     def set_status(self, message: str) -> None:
         self.sentence.setText(message)

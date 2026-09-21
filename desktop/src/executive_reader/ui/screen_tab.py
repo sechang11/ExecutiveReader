@@ -71,19 +71,44 @@ class ScreenTab(QWidget):
         # button can never print one the app does not actually listen for.
         keys = dict(getattr(self.app.config, "hotkeys", {}) or {})
         buttons = [
-            ("Read this window", "read_smart", self.app.read_smart),
-            ("Read what I selected", "", self.app.read_selection),
-            ("Read the clipboard", "read_clip", self.app.read_clipboard),
-            ("Read the screen now", "read_ocr", lambda: self.app.read_screen(False)),
-            ("Play or pause", "play_pause", self.app.toggle),
-            ("Stop", "stop", self.app.stop),
+            ("Read this page",
+             "Everything in the window in front of you, article and all.\n"
+             "Start here. It is the one to use most of the time.",
+             "read_smart", self.app.read_smart),
+            ("Read highlighted text",
+             "Only what you have selected with the mouse.\n"
+             "Use it to hear one paragraph instead of a whole page.",
+             "", self.app.read_selection),
+            ("Read what I copied",
+             "Whatever you last copied with Ctrl+C.\n"
+             "Use it when a window will not give up its text.",
+             "read_clip", self.app.read_clipboard),
+            ("Read the pixels on screen",
+             "Recognises the picture instead of asking for text.\n"
+             "Slower, and it can misread. For images, video and\n"
+             "viewers that refuse every other route.",
+             "read_ocr", lambda: self.app.read_screen(False)),
+            ("Play or pause", "", "play_pause", self.app.toggle),
+            ("Stop", "", "stop", self.app.stop),
         ]
-        for i, (label, key, slot) in enumerate(buttons):
+        for i, (label, why, key, slot) in enumerate(buttons):
             shortcut = _pretty(keys.get(key, "")) if key else ""
             button = QPushButton(label + ("\n" + shortcut if shortcut else ""))
-            button.setMinimumHeight(48)
+            button.setMinimumHeight(56)
+            if why:
+                button.setToolTip(why)
             button.clicked.connect(slot)
             grid.addWidget(button, i // 3, i % 3)
+
+        # The four ways of reading differ only in where the words come from,
+        # which the old names never said.
+        note = QLabel(
+            "The four reading buttons differ by where the words come from: "
+            "the whole window, just what you highlighted, your clipboard, or "
+            "the pixels themselves. Hover one to see when to use it.")
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#888;")
+        grid.addWidget(note, 2, 0, 1, 3)
         return box
 
     def _area_box(self) -> QGroupBox:

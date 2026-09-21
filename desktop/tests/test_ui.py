@@ -131,8 +131,16 @@ def test_the_mini_player_reflects_state_without_a_document():
         assert player.sentence.text() == "First sentence."
         assert player.progress.value() > 0
 
+        # The speed readout is a picker now, not a label: changing it must
+        # drive the reader, and showing a speed must not drive it back.
+        picked = []
+        player.speed_changed.connect(picked.append)
         player.set_speed(2.5)
-        assert player.speed.text() == "2.5x", player.speed.text()
+        assert player.speed.currentText() == "2.5x", player.speed.currentText()
+        assert picked == [], "showing a speed emitted a change"
+
+        player.speed.setCurrentIndex(player.speed.findText("2x"))
+        assert picked == [2.0], picked
         player.set_state("playing")
         player.set_state("idle")
     finally:

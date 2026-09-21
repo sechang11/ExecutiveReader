@@ -66,6 +66,10 @@ class TrayApp(QObject):
             self.player.show()
             self.player.place_bottom_right()
         self.player.set_speed(app.config.speed)
+        self.player.speed_changed.connect(self._speed_changed)
+
+    def _speed_changed(self, speed: float) -> None:
+        self.app.set_speed(speed)
 
     # --- menu ------------------------------------------------------------
     def _set_watch(self, mode: str) -> None:

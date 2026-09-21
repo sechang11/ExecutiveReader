@@ -432,6 +432,12 @@ class App:
     def prev_segment(self) -> None:
         self.reader.prev_segment()
 
+    def set_speed(self, speed: float) -> None:
+        """Set an exact speed, from the player's picker rather than a nudge."""
+        self.reader.set_speed(speed)
+        self.on_status("Speed " + ("%.2f" % self.config.speed).rstrip("0").rstrip(".") + "x")
+        self.config.save()
+
     def faster(self) -> None:
         speed = self.reader.nudge_speed(0.25)
         self.on_status("Speed " + ("%.2f" % speed).rstrip("0").rstrip(".") + "x")
