@@ -697,6 +697,241 @@ def test_the_ladder_reaches_ocr_for_a_scanned_pdf_and_says_why():
     assert any("scanned" in n for n in result.notes), result.notes
 
 
+
+def test_a_download_refuses_before_writing_when_the_disk_is_too_small():
+    """The Kokoro voices are about 330 MB.
+
+    Running out of room part-way leaves a .part file and an error thrown from
+    inside the write loop that says nothing about disk space. `free_space` was
+    written for exactly this and nothing called it, so the case it existed for
+    could not happen.
+    """
+    from executive_reader.tts import download as dl
+
+    def handler(request, timeout=None):
+        return _FakeResponse(b"0123456789")
+
+    restore = _with_fake_urlopen(handler)
+    real_free = dl.free_space
+    try:
+        dl.free_space = lambda path: 4          # room for four bytes
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "voice.bin"
+            try:
+                dl.download("http://example.invalid/voice.bin", target)
+            except OSError as exc:
+                message = str(exc)
+            else:
+                raise AssertionError("a download onto a full disk was allowed")
+            assert "disk space" in message, message
+            assert not target.exists(), "it wrote the file anyway"
+            assert not target.with_suffix(".bin.part").exists(), (
+                "it left a partial file behind")
+    finally:
+        dl.free_space = real_free
+        restore()
+
+
+def test_an_unmeasurable_disk_does_not_block_a_download():
+    """free_space returns 0 when it cannot tell, and so does an absent
+    Content-Length. Neither is a reason to refuse to download."""
+    from executive_reader.tts import download as dl
+
+    def handler(request, timeout=None):
+        return _FakeResponse(b"0123456789")
+
+    restore = _with_fake_urlopen(handler)
+    real_free = dl.free_space
+    try:
+        dl.free_space = lambda path: 0
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "voice.bin"
+            dl.download("http://example.invalid/voice.bin", target)
+            assert target.read_bytes() == b"0123456789"
+    finally:
+        dl.free_space = real_free
+        restore()
+
+
+
+def test_the_chrome_hint_never_raises_out_of_the_error_path():
+    """It runs while the app is already explaining why nothing could be read.
+
+    An exception here would replace a useful message about the real failure
+    with a traceback about the advice, which is the worst possible trade.
+    """
+    from executive_reader.capture import uia as uia_mod
+
+    saved = uia_mod.chrome_accessibility_state
+    try:
+        uia_mod.chrome_accessibility_state = lambda: "off"
+        hint = ladder.chrome_hint()
+        assert "force-renderer-accessibility" in hint, hint
+
+        uia_mod.chrome_accessibility_state = lambda: "on"
+        assert ladder.chrome_hint() == "", "advice offered when nothing is wrong"
+
+        def explode():
+            raise RuntimeError("COM went away")
+
+        uia_mod.chrome_accessibility_state = explode
+        assert ladder.chrome_hint() == "", "the advice raised instead of staying quiet"
+    finally:
+        uia_mod.chrome_accessibility_state = saved
+
+
+def test_the_claude_folder_follows_the_setting_when_one_is_given():
+    from executive_reader.config import Config
+
+    cfg = Config()
+    cfg.claude_projects_dir = ""
+    assert cfg.claude_dir().name == "projects", cfg.claude_dir()
+    assert cfg.claude_dir().parent.name == ".claude", cfg.claude_dir()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg.claude_projects_dir = tmp
+        assert cfg.claude_dir() == Path(tmp), cfg.claude_dir()
+
+
+
+def _text_pdf(pages: list) -> bytes:
+    """A PDF that really contains text, one list of lines per page.
+
+    Base-14 Helvetica needs no embedded font, so this is a few hundred bytes of
+    ASCII built here rather than a binary checked in that nobody can regenerate
+    or explain. Until this existed, no test read a PDF with any text in it: the
+    reader was loaded by every run and asserted against by nothing, which is
+    what a module-level coverage scan cannot see.
+    """
+    nl = chr(10)
+    backslash = chr(92)
+
+    def escape(line: str) -> str:
+        out = line.replace(backslash, backslash * 2)
+        return out.replace("(", backslash + "(").replace(")", backslash + ")")
+
+    first_page_obj = 4
+    kids = " ".join(str(first_page_obj + 2 * i) + " 0 R" for i in range(len(pages)))
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [" + kids + "] /Count " + str(len(pages)) + " >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    for i, lines in enumerate(pages):
+        objects.append(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]"
+            " /Resources << /Font << /F1 3 0 R >> >>"
+            " /Contents " + str(first_page_obj + 2 * i + 1) + " 0 R >>")
+        body = ["BT", "/F1 12 Tf", "72 720 Td", "14 TL"]
+        for line in lines:
+            body.append("(" + escape(line) + ") Tj")
+            body.append("T*")
+        body.append("ET")
+        stream = nl.join(body)
+        objects.append("<< /Length " + str(len(stream)) + " >>" + nl
+                       + "stream" + nl + stream + nl + "endstream")
+
+    out = bytearray(("%PDF-1.4" + nl).encode("latin-1"))
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += (str(number) + " 0 obj" + nl + body + nl + "endobj" + nl).encode("latin-1")
+    start = len(out)
+    out += ("xref" + nl + "0 " + str(len(objects) + 1) + nl
+            + "0000000000 65535 f " + nl).encode("latin-1")
+    for off in offsets:
+        out += (str(off).rjust(10, "0") + " 00000 n " + nl).encode("latin-1")
+    out += ("trailer" + nl + "<< /Size " + str(len(objects) + 1)
+            + " /Root 1 0 R >>" + nl + "startxref" + nl + str(start) + nl
+            + "%%EOF" + nl).encode("latin-1")
+    return bytes(out)
+
+
+def _read_pdf_text(pages: list) -> str:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "book.pdf"
+        path.write_bytes(_text_pdf(pages))
+        return files.read(path).text
+
+
+def test_a_pdf_yields_every_page_in_reading_order():
+    """The claim the whole design rests on: all pages at once, in order, with
+    no scrolling and no recognition pass."""
+    text = _read_pdf_text([
+        ["First page body."],
+        ["Second page body."],
+        ["Third page body."],
+    ])
+    for wanted in ("First page body.", "Second page body.", "Third page body."):
+        assert wanted in text, wanted + " missing from " + repr(text)
+    assert text.index("First") < text.index("Second") < text.index("Third"), text
+
+
+def test_a_pdf_with_text_is_not_mistaken_for_a_scan():
+    # Distinct pages on purpose. Three identical ones are correctly treated as
+    # boilerplate and stripped to nothing, which then looks exactly like a scan.
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "book.pdf"
+        path.write_bytes(_text_pdf([
+            ["Plenty of real words on the opening page."],
+            ["A different set of words on the second."],
+            ["And a third page that shares none of them."],
+        ]))
+        doc = files.read(path)
+    assert not doc.meta.get("needs_ocr"), doc.meta
+    assert doc.meta.get("pages") == 3, doc.meta
+
+
+def test_page_numbers_go_whether_or_not_the_pdf_has_a_running_footer():
+    """These were two jobs sharing one exit.
+
+    Boilerplate is found statistically and needs several pages. A page number
+    is found by its shape and needs nothing. Returning early when no
+    boilerplate was detected skipped the page numbers too, so the same document
+    kept or dropped them depending only on whether it happened to have a
+    running footer, and a numbered PDF without a header read "Page 1",
+    "Page 2" aloud between every page.
+    """
+    numbers = ("Page 1", "Page 2", "Page 3")
+
+    bare = _read_pdf_text([["Body of page one.", "Page 1"],
+                           ["Body of page two.", "Page 2"],
+                           ["Body of page three.", "Page 3"]])
+    for number in numbers:
+        assert number not in bare, number + " survived in " + repr(bare)
+
+    footed = _read_pdf_text([["Body of page one.", "A Running Footer", "Page 1"],
+                             ["Body of page two.", "A Running Footer", "Page 2"],
+                             ["Body of page three.", "A Running Footer", "Page 3"]])
+    for number in numbers:
+        assert number not in footed, number + " survived in " + repr(footed)
+    assert "A Running Footer" not in footed, footed
+    assert "Body of page two." in footed, footed
+
+
+def test_hard_wrapped_pdf_prose_is_rejoined_into_one_sentence():
+    """An exporter breaks a sentence across lines and the reader must not.
+
+    On the 252-page test PDF this step alone removed 740 false sentence breaks,
+    and until now nothing checked it against an actual PDF.
+    """
+    from executive_reader.config import Config
+    from executive_reader.textproc.normalize import normalize
+    from executive_reader.textproc.segment import segment
+
+    text = _read_pdf_text([
+        ["The exporter wrapped this sentence across",
+         "three separate lines even though it is",
+         "plainly one sentence."],
+    ])
+    cfg = Config()
+    segments = segment(normalize(text, skip_code=cfg.skip_code_blocks,
+                                 urls=cfg.read_urls), cfg.max_segment_chars)
+    joined = [s for s in segments if "plainly one sentence" in s]
+    assert len(joined) == 1, segments
+    assert joined[0].startswith("The exporter wrapped"), joined[0]
+
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

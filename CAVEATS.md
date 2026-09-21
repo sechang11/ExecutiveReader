@@ -368,3 +368,184 @@ raise:
   discarded for having no text, so the one sentence telling a user what to do
   about a scan could not be delivered. Grepping for the *reader* of a key, not
   just the writer, is the check.
+
+## 22. Nothing was checking that both halves split sentences the same way
+
+Both READMEs say the two halves "split sentences and pronounce words
+identically". `tools/conformance.mjs` compares the pronunciation side and stops
+there: it exercises the symbol, currency and expansion stages and never calls
+`segment()`, although `shared/abbreviations.json` exists for no other purpose
+and is described in both READMEs as what keeps splitting identical.
+
+This is entry 16 again. `shared/` really is shared, a harness really does exist,
+and the conclusion that segmentation was covered followed from both without ever
+being true.
+
+`tools/conformance_segment.mjs` now runs the whole pipeline, normalise then
+segment, over the same inputs on both sides. Its first run found nine
+disagreements. One was a desktop defect and is fixed: a lone capital before a
+period is an initial, so "J. R. R. Tolkien wrote it." was arriving as five
+segments and is now one. The extension already had that rule.
+
+Eight remain, recorded in the harness. The substantial group is layout:
+
+| Input | Desktop | Extension |
+|---|---|---|
+| A heading, blank line, a paragraph | two segments | one, with the break inside |
+| Prose hard-wrapped by an exporter | rejoined into one sentence | three lines in one segment |
+| `- First item.` | bullet stripped | bullet spoken |
+| A markdown table | one segment per row, rule dropped | whole table in one segment |
+
+The desktop half treats a line break as structure. The extension treats it as an
+ordinary character, and gets away with it because the DOM has already separated
+the elements it reads. It does not get away with it on a PDF, which is the one
+source where hard wrapping is universal, and the extension vendors pdf.js
+specifically to read those.
+
+Two more come from stages that run before the splitter and are not covered by
+the other harness either: the desktop collapses a run of periods, so `Wait...`
+becomes `Wait.`, and reads a link as its domain, so a URL becomes "link to
+example.com". The extension does neither.
+
+**A defect they agree on, which is why no harness will flag it.** A line
+beginning `1. ` splits after the number on both sides, so a numbered list is
+spoken as "one." then a pause then the item, on every item of every list.
+Recipes, instructions and papers are full of them. Fixing it means a shared rule
+saying a line-initial enumerator is not a terminator, plus an implementation in
+each engine, which is exactly the coordinated change `shared/normalization.json`
+describes in its own schema note. Doing it in one half alone now fails the
+harness, which is the point.
+
+## 23. Two guards were checking the wrong thing, in the same way
+
+Both were found while writing the harnesses above, and both would have produced
+confident nonsense.
+
+The segmentation harness compared a Python segmenter that had loaded
+`shared/abbreviations.json` against a JavaScript one that had not, because the
+extension fills those sets at runtime and the harness never called
+`loadAbbreviations`. It reported that the halves disagreed about "Dr. Smith
+arrived." They do not. Every abbreviation case was a false positive produced by
+the harness's own setup.
+
+The first version also fed raw text to `segment()` alone, on the reasoning that
+isolating the stage would keep a normaliser difference from arriving disguised
+as a segmentation difference. That reasoning is fine and the result was still
+wrong: the desktop rejoins hard-wrapped prose during `normalize`, so isolating
+`segment()` reported it breaking sentences it never breaks in use.
+
+Both have the same shape as entry 5, where cached bytecode made a mutation tool
+report verdicts about code that never ran. A harness is a measuring instrument,
+and an instrument that is not set up the way production is set up measures
+itself. The check that caught both was the same one: take a disagreement the
+tool reports, reproduce it by hand the way the app actually runs, and only then
+believe it.
+
+## 24. The test suite was writing to the real settings file
+
+`App()` with no arguments loads the real config and opens the real database,
+which is right for the application and wrong for a test. Two tests in
+`test_ui.py` constructed one, and `App.shutdown()` writes the config back and
+flushes the reading position, so every run of the suite rewrote
+`%APPDATA%\Earmark\config.json` belonging to whoever ran it.
+
+Nothing was lost, because load-then-save round-trips to the same bytes. That is
+luck rather than design: a test that had built a plain `Config()` instead of
+loading one would have written defaults over real settings, and a test that read
+a document would have written rows into real history. This is the same folder
+where a rename previously started an empty database while every test passed.
+
+Both tests now redirect `data_dir()` to a temporary directory. The redirect has
+to be applied twice, because `store/db.py` does `from ..config import data_dir`
+and so holds its own reference; patching only the one in `config` leaves the
+database pointing at the real file, which is a smaller version of the folder-and-
+file pair that caused the earlier data loss.
+
+The general form: **a test that can reach real user state will eventually write
+to it**, and the failure is silent because the round-trip usually produces
+identical bytes. Worth checking by watching the file rather than by reading the
+test, which is how this was found and then confirmed.
+
+## 25. A check that only ran as a side effect of an unrelated one
+
+`_strip_repeated_lines` in the PDF reader does two jobs. It finds running
+headers and footers, which is statistical and needs several pages to be
+confident. It also drops page numbers, which is a matter of shape and needs
+nothing but the line itself.
+
+They shared an exit. When no boilerplate was detected the function returned the
+pages untouched, and that return also skipped the page numbers. So whether a PDF
+read "Page 1", "Page 2" aloud between every page depended entirely on whether it
+happened to have a running header somewhere else on the page. A numbered PDF
+without a header is the ordinary case.
+
+Nothing about the code looked wrong. Both jobs are page furniture, they belong
+in one pass, and the early return reads like an optimisation. The general form
+is worth watching for: **a cheap unconditional check placed inside an expensive
+conditional one silently inherits its condition.**
+
+It was found by reading a PDF that contained text, which nothing had done
+before. `read_pdf` was loaded by every run of the suite and asserted against by
+nothing, exactly as entry 4 describes, and the only PDF fixture was a blank one
+written to test scan detection. The fixture that found this builds a real PDF
+from base-14 Helvetica in a few hundred bytes of ASCII, so there is no binary
+checked in that nobody can regenerate.
+
+## 26. The two halves rewrite typographic punctuation differently
+
+Found by following the other session's argument about anchor matching rather
+than accepting or refusing it, which is worth noting on its own: the
+disagreement was real and it was not about the thing either of us was arguing.
+
+The desktop normaliser translates seven characters that the extension leaves
+untouched. Measured on both halves with the same input:
+
+| Character | Desktop | Extension |
+|---|---|---|
+| Curly double quotes, both | `"` | unchanged |
+| Curly single quotes, both | `'` | unchanged |
+| En dash | `-` | unchanged |
+| Em dash | comma and a space | unchanged |
+| Non-breaking space | space | unchanged |
+
+So the two halves hold different text for the same page. `_output_contract` in
+`shared/normalization.json` exists precisely so they do not, saying that
+otherwise "a cross-language check can then only ever assert equivalence, never
+equality".
+
+The em dash is the one with speech in it. Turning it into a comma and a space
+makes the voice pause where the writer intended a pause; leaving it means the
+engine drops an unmapped symbol silently. So the desktop behaviour looks right
+and belongs in the shared data, where both halves would pick it up.
+
+**Why nothing caught it.** `tools/conformance.mjs` runs `applySymbols`,
+`applyCurrency` and `applyExpansions`. It never calls the full `normalize()`,
+where the translation lives, and its corpus contains no curly quote, dash or
+non-breaking space at all. A harness with a hole in its corpus is the passing
+green result of entry 14 in another costume.
+
+**What it was mistaken for.** Three of the eight anchor divergences were
+attributed to anchor matching and argued as a question about what `exact`
+means. They were this, one layer up. The two that remain are a real question,
+and `docs/anchor-vocabulary.md` answers it twice and differently: the summary
+table says `exact` is "character for character", the section body says "word for
+word", and a recapitalised sentence satisfies one and not the other. That is the
+ambiguity the document's own "implement from this document" section says
+implementing from prose is meant to make visible.
+
+## 27. My own harness was measuring a place production never reaches
+
+`conformance_anchor.mjs` built anchors from raw case text. Production builds
+them from `segment(normalize(text))`, so a segment reaching the anchor layer has
+always been through the normaliser. Comparing raw text asked the two halves a
+question neither is ever asked.
+
+Correcting it moved three cases from disagreement to agreement and left the
+disagreement that was real. Identical went from 15 of 23 to 18.
+
+This is the third time on this project that a measuring instrument was set up
+differently from the thing it measures, after the cached bytecode in entry 5 and
+the unloaded abbreviations in entry 23. The pattern is now specific enough to
+state as a rule: **before believing a harness, check that each side is fed what
+the running application feeds it, at the same stage.** All three were found by
+reproducing one reported disagreement by hand, never by reading the harness.

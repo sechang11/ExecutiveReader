@@ -10,7 +10,9 @@ Skips cleanly when Qt cannot open a display, so the suite still runs headless.
 """
 from __future__ import annotations
 
+import contextlib
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -19,6 +21,34 @@ from _paths import install
 install()
 
 SKIPPED = "SKIP"
+
+
+@contextlib.contextmanager
+def own_data_dir():
+    """Run against a throwaway data directory instead of the real one.
+
+    `App()` with no arguments loads the real config and opens the real
+    database, and `App.shutdown()` writes both back. So these tests were
+    reading and rewriting the settings and reading history of whoever ran the
+    suite, and a test that constructed a default Config would have overwritten
+    their settings with defaults.
+
+    Both names have to be redirected. `store/db.py` does `from ..config import
+    data_dir`, which binds its own reference, so patching only the one in
+    config leaves the database pointing at the real file.
+    """
+    from executive_reader import config as config_module
+    from executive_reader.store import db as db_module
+
+    saved = (config_module.data_dir, db_module.data_dir)
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        here = Path(tmp)
+        try:
+            config_module.data_dir = lambda: here
+            db_module.data_dir = lambda: here
+            yield here
+        finally:
+            config_module.data_dir, db_module.data_dir = saved
 
 
 def _qt():
@@ -41,21 +71,22 @@ def test_the_tray_app_builds_and_shuts_down_cleanly():
     from executive_reader.app import App
     from executive_reader.ui.tray import TrayApp
 
-    app = App()
-    tray = TrayApp(app, qt)
-    try:
-        assert tray.tray.isVisible()
-        actions = tray.tray.contextMenu().actions()
-        assert len(actions) >= 10, len(actions)
-        # Every menu entry must be wired to something.
-        for action in actions:
-            if not action.isSeparator():
-                assert action.text(), "a menu entry has no label"
-        assert tray.library.centralWidget().count() == 5, "five tabs expected"
-    finally:
-        tray.hotkeys.stop()
-        app.shutdown()
-        tray.tray.hide()
+    with own_data_dir():
+        app = App()
+        tray = TrayApp(app, qt)
+        try:
+            assert tray.tray.isVisible()
+            actions = tray.tray.contextMenu().actions()
+            assert len(actions) >= 10, len(actions)
+            # Every menu entry must be wired to something.
+            for action in actions:
+                if not action.isSeparator():
+                    assert action.text(), "a menu entry has no label"
+            assert tray.library.centralWidget().count() == 5, "five tabs expected"
+        finally:
+            tray.hotkeys.stop()
+            app.shutdown()
+            tray.tray.hide()
 
 
 def test_the_library_populates_every_tab():
@@ -65,19 +96,25 @@ def test_the_library_populates_every_tab():
     from executive_reader.app import App
     from executive_reader.ui.library import Library
 
-    app = App()
-    window = Library(app)
-    try:
-        window.refresh()
-        assert window.voice_box.count() > 0, "no voices offered"
-        assert window.rules_table.rowCount() > 10, "pronunciation table empty"
-        # History and bookmarks may legitimately be empty; the tables must
-        # still exist and have their headers.
-        assert window.history_table.columnCount() == 5
-        assert window.bookmark_table.columnCount() == 4
-    finally:
-        window.close()
-        app.shutdown()
+    with own_data_dir():
+        app = App()
+        window = Library(app)
+        try:
+            window.refresh()
+            assert window.voice_box.count() > 0, "no voices offered"
+            assert window.rules_table.rowCount() > 10, "pronunciation table empty"
+            # History and bookmarks may legitimately be empty; the tables must
+            # still exist and have their headers.
+            assert window.history_table.columnCount() == 5
+            assert window.bookmark_table.columnCount() == 4
+            # The Settings status must say where rule data came from, not just
+            # which engines are ready. When shared/ is missing the app falls
+            # back to built-in rules and otherwise says nothing about it.
+            status = window.engine_status.text()
+            assert "shared" in status.lower() or "built-in" in status.lower(), status
+        finally:
+            window.close()
+            app.shutdown()
 
 
 def test_the_mini_player_reflects_state_without_a_document():

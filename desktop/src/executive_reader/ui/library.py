@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox,
                                QSpinBox, QTableWidget, QTableWidgetItem,
                                QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
+from ..textproc import shared_rules
 from ..textproc.pronounce import Rule
 from ..tts.base import EngineError
 from ..tts.download import human
@@ -202,7 +203,14 @@ class Library(QMainWindow):
         return page
 
     def _refresh_voices(self) -> None:
-        self.engine_status.setText("   ".join(self.app.registry.describe()))
+        # Say which rule data is in use as well as which engines are. When
+        # shared/ cannot be found the app falls back to built-in rules and
+        # still works, so the only symptom is a word pronounced by a rule
+        # someone changed weeks ago. shared_rules.describe() was written to
+        # answer exactly that and nothing was calling it.
+        status = list(self.app.registry.describe())
+        status.append(shared_rules.describe())
+        self.engine_status.setText("   ".join(status))
         current = self.voice_box.currentData()
         self.voice_box.clear()
         for voice in self.app.registry.voices():

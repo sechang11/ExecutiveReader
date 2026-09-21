@@ -153,5 +153,14 @@
     "p.m",
     "A.M",
     "P.M"
-  ]
+  ],
+  "_list_markers": "A token of digits only, or a single letter, followed by a period, at the very START of the text being segmented, is a list marker and never ends a sentence. Both halves segment one block or line at a time, so position zero is where '1. ' always sits and nowhere else. Without it every numbered list is spoken as 'one.' pause 'First item', which is the shape of the defect rather than a detail of it: the pause lands between the number and the thing it numbers. The single-letter half covers 'a. ' and 'b. '. The extension's initials rule only ever matched a CAPITAL letter, because it was written for 'J. R. R. Tolkien', so a lowercase marker was not already handled there; anchoring it at the start is safer than widening the initials rule, which would also stop splitting a sentence genuinely ending in a lone letter. KNOWN LIMIT, recorded rather than discovered later: 'Step 1. Preheat the oven' still splits, because the digit is not at the start. That is the price of a rule that can never fire mid-sentence, and it is the right price.",
+  "list_markers": {
+    "digits_at_start": true,
+    "single_letter_at_start": true
+  },
+  "_terminators": "An ellipsis followed by a lowercase word does not end a sentence. 'Wait… what happened?' is one sentence with a trailing-off in it, and splitting it produces two utterances with a sentence-final drop in the middle of a thought. The evidence is the same one both engines already consult for abbreviations that could end a sentence: does what follows look like the start of a new one. This became worth fixing rather than recording when repeated_punctuation started producing U+2026 for every authored '...', which moved the case from rare to every document. DELIBERATELY NOT GENERALISED to the plain period, though the same argument appears to apply. A period followed by a lowercase word is usually not a boundary in edited prose, but informal all-lowercase writing is real content for a reader — chat logs, forum posts, notes — and there the rule would swallow every boundary in the piece and read it as one utterance with no pauses in it. The ellipsis has no such counterexample: an ellipsis before a lowercase word is a trailing-off essentially every time.",
+  "terminators": {
+    "ellipsis_before_lowercase_is_not_a_boundary": true
+  }
 }

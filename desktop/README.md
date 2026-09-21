@@ -222,7 +222,7 @@ desktop/
     textproc/       normalisation, sentence splitting, pronunciation, symbols
     store/          SQLite history and bookmarks, text-quote anchors
     ui/             tray, mini player, library
-  tests/            57 tests, no audio device needed
+  tests/            202 tests, no audio device needed
 ```
 
 Sitting alongside, outside this folder: `extension/` is the Chrome extension,
@@ -234,16 +234,29 @@ Sitting alongside, outside this folder: `extension/` is the Chrome extension,
 desktop/.venv/Scripts/python.exe desktop/tests/test_reader.py
 ```
 
-One of them runs tools/conformance.mjs, which feeds the same inputs through
-this Python and the extension JavaScript and fails if the two disagree. It
-skips when Node is absent. Both sides have been checked by deliberately
-breaking a rule and confirming the harness reports it, rather than trusting a
-green result.
+Swap the filename for any other `test_*.py`. They find the package and the
+repository root by searching upward for a marker rather than by counting
+directories, so they run from any working directory and survive being moved.
 
-Swap the filename for `test_textproc.py` or `test_store.py` for the other two.
-They find the package and the repository root by searching upward for a marker
-rather than by counting directories, so they run from any working directory and
-survive being moved again.
+### Three things both halves must agree about
+
+Each has a harness that feeds the same inputs through this Python and the
+extension JavaScript and fails if they disagree. All three skip when Node is
+absent, and all three have been checked by deliberately breaking a rule and
+confirming the harness reports it, rather than by trusting a green result.
+
+| Harness | Guards |
+|---|---|
+| `tools/conformance.mjs` | symbols, currency, abbreviation expansion |
+| `tools/conformance_segment.mjs` | where sentences begin and end |
+| `tools/conformance_anchor.mjs` | where a bookmark lands, and what it is called |
+
+The last two are new, and each found real disagreements on its first run. Both
+list the ones still outstanding in a `KNOWN` map inside the harness, with the
+reason. That list is not a way to ignore them: an unrecorded disagreement fails,
+and so does a recorded one that stops happening, so fixing a divergence forces
+the entry to be deleted rather than left describing behaviour the code no longer
+has. See CAVEATS.md entries 20 and 22 for what is outstanding and why.
 
 `desktop/tests/smoke_audio.py` is separate because it needs speakers and makes
 noise.

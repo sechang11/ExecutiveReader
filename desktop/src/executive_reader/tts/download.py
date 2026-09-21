@@ -37,6 +37,22 @@ def download(url: str, dest: Path, on_progress: ProgressFn | None = None,
                 total += have
             mode = "ab" if resuming else "wb"
             done = have if resuming else 0
+
+            # Fail before writing rather than part-way through. The Kokoro
+            # voices are about 330 MB, and running out of room mid-fetch leaves
+            # a .part file and an error from deep inside the write loop that
+            # says nothing about disk space. This check existed and nothing
+            # called it, so the case it was written for could not happen.
+            #
+            # Both guards matter: an unknown Content-Length and an unreadable
+            # disk both report zero, and neither is a reason to refuse.
+            remaining = max(0, total - done)
+            space = free_space(part.parent)
+            if remaining and space and space < remaining:
+                raise OSError(
+                    "Not enough disk space for " + dest.name + ": "
+                    + human(remaining) + " needed, " + human(space) + " free.")
+
             with open(part, mode) as fh:
                 while True:
                     chunk = resp.read(_CHUNK)

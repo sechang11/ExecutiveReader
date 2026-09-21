@@ -171,6 +171,57 @@ def fingerprint() -> str:
     return str(combined) if isinstance(combined, str) else ""
 
 
+def terminators(fallback: dict | None = None) -> dict:
+    """Which terminators do not end a sentence, and under what condition."""
+    data = load("abbreviations")
+    flags = data.get("terminators") if isinstance(data, dict) else None
+    if isinstance(flags, dict) and flags:
+        return dict(flags)
+    return dict(fallback or {})
+
+
+def list_markers(fallback: dict | None = None) -> dict:
+    """Which ordinal shapes at the start of a line are markers, not sentences."""
+    data = load("abbreviations")
+    flags = data.get("list_markers") if isinstance(data, dict) else None
+    if isinstance(flags, dict) and flags:
+        return dict(flags)
+    return dict(fallback or {})
+
+
+def collapse(fallback: dict | None = None) -> dict:
+    """The `collapse` flags, which say which cleanup rules run.
+
+    The section has existed since the beginning and neither half read it. Both
+    implemented some of it inline and inconsistently instead, which is how the
+    two ended up rewriting typographic punctuation differently. `_collapse_rules`
+    in the same file defines each key precisely, and `_order` fixes the order,
+    because two of them interact.
+    """
+    data = load("normalization")
+    flags = data.get("collapse") if isinstance(data, dict) else None
+    if isinstance(flags, dict) and flags:
+        return dict(flags)
+    return dict(fallback or {})
+
+
+def collapse_order(fallback: list | None = None) -> list:
+    """The order the collapse rules run in, which is part of the contract."""
+    data = load("normalization")
+    rules = data.get("_collapse_rules") if isinstance(data, dict) else None
+    if isinstance(rules, dict):
+        order = rules.get("_order")
+        if isinstance(order, str) and order.strip():
+            # The value is a sentence, not a bare list: it names the rules in
+            # order and then explains why the order matters. Keeping only the
+            # names that are real keys drops the explanation without needing
+            # the prose to be written in any particular shape.
+            known = {k for k in rules if not k.startswith("_")}
+            names = [n.split(".")[0].strip() for n in order.split(",")]
+            return [n for n in names if n in known]
+    return list(fallback or [])
+
+
 def url_mode(default: str = "domain") -> str:
     urls = load("normalization").get("urls")
     if isinstance(urls, dict):

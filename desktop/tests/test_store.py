@@ -547,6 +547,61 @@ def test_position_still_decides_when_context_cannot():
     assert near_second.locate(segments).index == 300, "should pick the nearer copy"
 
 
+
+def test_clearing_history_keeps_bookmarks():
+    """The confirmation dialog promises it, so it is a promise worth pinning.
+
+    A bookmark is something the user chose to keep; a history row is something
+    the app wrote on their behalf. Deleting the first while offering to delete
+    the second would be the worst possible reading of that button.
+    """
+    with temp_store() as store:
+        store.touch("test://one", "One", "file", "snippet", 10)
+        store.touch("test://two", "Two", "file", "snippet", 10)
+        store.add_bookmark("test://one", "One", 3,
+                           Anchor.create(SEGMENTS, 3), "keep me")
+        assert len(store.history()) == 2
+        assert len(store.bookmarks()) == 1
+
+        store.clear_history()
+
+        assert store.history() == [], "history survived being cleared"
+        kept = store.bookmarks()
+        assert len(kept) == 1, "the bookmark went with the history"
+        assert kept[0].note == "keep me", kept[0].note
+
+
+def test_forgetting_one_document_takes_its_bookmarks_with_it():
+    """The opposite promise: removing a document removes everything about it,
+    and leaves every other document alone."""
+    with temp_store() as store:
+        store.touch("test://one", "One", "file", "snippet", 10)
+        store.touch("test://two", "Two", "file", "snippet", 10)
+        store.add_bookmark("test://one", "One", 1, Anchor.create(SEGMENTS, 1))
+        store.add_bookmark("test://two", "Two", 2, Anchor.create(SEGMENTS, 2))
+
+        store.forget("test://one")
+
+        assert [row.uri for row in store.history()] == ["test://two"]
+        assert [mark.uri for mark in store.bookmarks()] == ["test://two"]
+
+
+def test_approximate_is_exactly_the_opposite_of_verified():
+    """Two names for one fact, and the pair is the shared contract.
+
+    Anything reading one and not the other would drift the moment the rule
+    behind them changed, so they must never be able to disagree.
+    """
+    from executive_reader.store.anchors import Anchor as A
+
+    for rules_changed in (False, True):
+        for segments in ([], list(SEGMENTS), ["Nothing in common at all."]):
+            found = A.create(SEGMENTS, 2).locate(segments, rules_changed)
+            assert found.approximate is not found.verified, (
+                "how=" + found.how + " verified=" + str(found.verified)
+                + " approximate=" + str(found.approximate))
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

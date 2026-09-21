@@ -255,13 +255,37 @@ class App:
             return
         self.read(doc)
 
+    def _stop_claude_watch(self, timeout: float = 2.0) -> None:
+        """Stop the watcher and wait for it to actually be gone.
+
+        Two faults lived in not waiting.
+
+        Turning the setting off and straight back on, inside the one second the
+        loop spends waiting, left the old thread alive: it woke, found the stop
+        flag cleared again and a fresh tail in place, and carried on. Two
+        threads then polled one Tail, which shares a file offset, so a reply
+        arrived twice or not at all.
+
+        The second is the shape that used to segfault the player on exit.
+        shutdown() set the flag and went straight on to closing the database and
+        the audio device, so a watcher part-way through reading a reply could
+        touch both after they were gone.
+        """
+        self._claude_stop.set()
+        thread = self._claude_thread
+        self._claude_thread = None
+        self._claude_tail = None
+        if (thread is not None and thread.is_alive()
+                and thread is not threading.current_thread()):
+            thread.join(timeout=timeout)
+
     def set_claude_watch(self, enabled: bool) -> None:
         """Read new Claude replies aloud as they are written to the transcript."""
         self.config.claude_watch = enabled
+        # Always from a clean state, including when this is called while already
+        # watching, which otherwise started a second thread beside the first.
+        self._stop_claude_watch()
         if not enabled:
-            self._claude_stop.set()
-            self._claude_thread = None
-            self._claude_tail = None
             return
         target = ct.latest_session(ct.projects_dir(self.config.claude_projects_dir))
         if target is None:
@@ -284,11 +308,24 @@ class App:
                 turns = tail.poll()
             except Exception:
                 turns = []
-            for turn in turns:
-                body = turn.speakable(self.config.claude_read_thinking)
-                if body.strip():
-                    self.read(Document(text=body, title="Claude reply",
-                                       source="claude"), resume=False)
+            # One document for the whole batch, not one per turn.
+            #
+            # A poll returns everything written since the last one, and reading
+            # is not a queue: Reader.load() stops whatever is speaking and
+            # replaces it. So two replies landing in the same second meant the
+            # first was cut off part-way through a sentence and the second
+            # started, with nothing to say a reply had been skipped.
+            #
+            # Joining on a blank line keeps them separate to the segmenter,
+            # which treats a paragraph break as a hard boundary, so each reply
+            # still starts its own sentence.
+            bodies = [turn.speakable(self.config.claude_read_thinking)
+                      for turn in turns]
+            bodies = [body.strip() for body in bodies if body.strip()]
+            if bodies:
+                self.read(Document(text=(chr(10) + chr(10)).join(bodies),
+                                   title="Claude reply", source="claude"),
+                          resume=False)
             self._claude_stop.wait(1.0)
 
     # --- clipboard watch -------------------------------------------------
@@ -382,7 +419,7 @@ class App:
 
     def shutdown(self) -> None:
         self._flush_position()
-        self._claude_stop.set()
+        self._stop_claude_watch()
         if self._clip_watcher is not None:
             self._clip_watcher.stop()
         if self._sleep_timer is not None:

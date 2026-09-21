@@ -13,17 +13,10 @@ from functools import lru_cache
 
 from . import shared_rules, symbols
 
-_ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff\u00ad"), None)
-_QUOTES = str.maketrans({
-    "\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'",
-    "\u2013": "-", "\u2014": ", ", "\u00a0": " ",
-})
-
 _CRLF = re.compile(r"\r\n?")
 # PDF tables of contents use dot leaders, often as spaced dots: "Title . . . 12".
 # Left alone they arrive at the voice as a long run of full stops.
 _TOC_LINE = re.compile(r"^([^\n]*?)[ \t]*\.(?:[ \t]*\.){3,}[ \t]*\d{1,4}[ \t]*$", re.M)
-_DOT_LEADER = re.compile(r"[ \t]*\.(?:[ \t]*\.){3,}[ \t]*")
 _BARE_NUMBER_LINE = re.compile(r"^[ \t]*\d{1,4}[ \t]*$", re.M)
 
 # PDFs and emails hard-wrap prose mid-sentence. Rejoin those lines, or every
@@ -121,20 +114,213 @@ def _urls(text: str, mode: str) -> str:
     return _URL.sub(repl, text)
 
 
+
+@lru_cache(maxsize=1)
+def _owned_symbols() -> tuple:
+    """Every character the shared symbols and currency lists claim.
+
+    Those lists are the authority on what gets spoken, so nothing earlier in
+    the pipeline may destroy one of their characters before they see it.
+    """
+    out = []
+    for entry in list(shared_rules.symbols()) + list(shared_rules.currency()):
+        ch = entry.get("symbol") or ""
+        if ch:
+            out.append(ch)
+    return tuple(out)
+
+
+#: Characters the collapse stage deliberately produces, which NFKC would then
+#: undo. U+2026 is the whole reason the ellipsis rule exists, and NFKC expands
+#: it straight back into three periods, which the repeat rule then turns into
+#: one: the authored trailing-off restored and destroyed inside one function.
+#:
+#: The stage-by-stage harness could not see this. apply_collapse returned the
+#: ellipsis correctly and all 510 comparisons passed. It showed up only by
+#: timing the finished sentence through the real voice and finding the number
+#: had not moved, which is the mirror of the four-dot difference that only a
+#: stage comparison could see. Both checks are needed and neither substitutes.
+_COLLAPSE_PRODUCES = ("…",)
+
+
+@lru_cache(maxsize=1)
+def _nfkc_shield() -> tuple:
+    """Owned characters that NFKC would rewrite, each with a placeholder.
+
+    NFKC turns U+2122 into the two letters TM, so the symbols stage never saw
+    the character and "Widget(tm)" was read as "Widget T M" rather than
+    "Widget trademark". The conformance corpus contains that exact string and
+    passed, because the harness compares the symbols stage in isolation and
+    never runs the whole normalizer.
+
+    One character is affected today. The set is computed from the shared lists
+    rather than written down, so adding a symbol cannot quietly bring the bug
+    back.
+    """
+    pairs = []
+    for index, ch in enumerate(_owned_symbols() + _COLLAPSE_PRODUCES):
+        if unicodedata.normalize("NFKC", ch) != ch:
+            pairs.append((ch, chr(0xE000 + index)))
+    return tuple(pairs)
+
+
+def _nfkc_preserving_symbols(text: str) -> str:
+    shield = _nfkc_shield()
+    for ch, placeholder in shield:
+        text = text.replace(ch, placeholder)
+    text = unicodedata.normalize("NFKC", text)
+    for ch, placeholder in shield:
+        text = text.replace(placeholder, ch)
+    return text
+
+
+# --- the shared collapse stage ------------------------------------------
+#
+# shared/normalization.json has carried a `collapse` section since the
+# beginning and neither half read it. Both did some of it inline and
+# inconsistently instead, which is how the two came to rewrite typographic
+# punctuation differently: this half straightened curly quotes and the other
+# did not, so the same page produced different text.
+#
+# The cost was not conformance. The phonemizer looks words up in CMUdict by
+# literal text, so a curly apostrophe turns "don't" into two unknown tokens and
+# the neural voices say "dawn tee". That is most contractions on most
+# professionally typeset pages.
+#
+# `_collapse_rules` in the shared file defines every key, and `_order` fixes
+# the order because two of them interact. Both are read here rather than
+# restated, so a change to the contract does not need this file edited.
+
+_COLLAPSE_FALLBACK = {
+    "zero_width": True, "soft_hyphens": True, "smart_quotes_to_plain": True,
+    "nbsp_to_space": True, "dashes_to_plain": True, "em_dash_to_comma": True,
+    "footnote_markers": True, "dot_leaders": True,
+    "repeated_punctuation": True, "emoji": "skip",
+}
+_ORDER_FALLBACK = ["zero_width", "soft_hyphens", "smart_quotes_to_plain",
+                   "nbsp_to_space", "dashes_to_plain", "em_dash_to_comma",
+                   "footnote_markers", "dot_leaders", "repeated_punctuation",
+                   "emoji"]
+
+_ZW = dict.fromkeys(map(ord, "​‌‍⁠﻿"), None)
+_SOFT_HYPHEN = dict.fromkeys(map(ord, "­"), None)
+_SMART_QUOTES = str.maketrans({
+    "“": '"', "”": '"', "„": '"', "‟": '"', "″": '"',
+    "‘": "'", "’": "'", "‚": "'", "‛": "'", "′": "'",
+})
+# Guillemets are deliberately absent: they are not English quoting and mapping
+# them would be a guess.
+_NBSP = str.maketrans({" ": " ", " ": " ", " ": " "})
+_PLAIN_DASHES = str.maketrans({"–": "-", "‒": "-", "―": "-"})
+# The spaces either side are absorbed on purpose. Replacing the character alone
+# turns "left - quickly" into "left , quickly", with the comma floating off the
+# word it belongs to.
+_EM_DASH = re.compile(r"[ \t]*—[ \t]*")
+_SUPERSCRIPT_DIGITS = dict.fromkeys(
+    [0x00b9, 0x00b2, 0x00b3] + list(range(0x2070, 0x207a)), None)
+# Four or more, so a genuine ellipsis is left to repeated_punctuation below.
+_DOT_LEADER_RUN = re.compile(r"\.(?:[ \t]*\.){3,}")
+#: Exactly three periods is an authored trailing-off and becomes U+2026.
+#: Exactly two is a typo and becomes one period. Four or more never reach here,
+#: because dot_leaders has already turned them into a space, which is why it has
+#: to run first. The three-then-two ordering matters too: taking two first would
+#: leave "..." as ".." rather than an ellipsis.
+#:
+#: This one is not tidying. Measured on five sentences on Microsoft David,
+#: collapsing an authored "..." to a period adds about half a second of pause
+#: every time, turning a trailing-off into a firmer stop than was written. That
+#: voice cannot tell "..." from U+2026 at all, so nothing is won by choosing the
+#: character; the gain is from no longer collapsing. U+2026 is the target
+#: because it is a real token in the Kokoro vocabulary and free on the rest.
+_ELLIPSIS_RUN = re.compile(r"\.{3}")
+_DOUBLE_PERIOD = re.compile(r"\.{2}")
+_BANG_QUESTION_RUN = re.compile(r"([!?])\1+")
+# Python's re has no \p{Extended_Pictographic}, which is what the other half
+# uses, so this is the pictographic planes plus the variation selector. It is
+# narrower than the property: symbols the shared symbols list already handles,
+# such as (c) and (R) and (TM), are outside it, which the rule requires anyway.
+_EMOJI = re.compile(
+    "[\U0001f000-\U0001faff\U0001f1e6-\U0001f1ff☀-➿️]+")
+
+
+def _collapse_flags() -> dict:
+    return shared_rules.collapse(_COLLAPSE_FALLBACK)
+
+
+def apply_collapse(text: str) -> str:
+    """Cleanup that must happen before anything matches literal text.
+
+    Runs first, ahead of expansions, symbols and the dictionary, because every
+    one of those compares against literal characters and so does CMUdict.
+    """
+    flags = _collapse_flags()
+    for name in (shared_rules.collapse_order(_ORDER_FALLBACK) or _ORDER_FALLBACK):
+        setting = flags.get(name)
+        if not setting:
+            continue
+        if name == "zero_width":
+            text = text.translate(_ZW)
+        elif name == "soft_hyphens":
+            text = text.translate(_SOFT_HYPHEN)
+        elif name == "smart_quotes_to_plain":
+            text = text.translate(_SMART_QUOTES)
+        elif name == "nbsp_to_space":
+            text = text.translate(_NBSP)
+        elif name == "dashes_to_plain":
+            text = text.translate(_PLAIN_DASHES)
+        elif name == "em_dash_to_comma":
+            text = _EM_DASH.sub(", ", text)
+        elif name == "footnote_markers":
+            # Superscripts, and bracketed markers now that the shared rule
+            # covers them. Both halves argued the bracketed case in opposite
+            # directions from what each engine "obviously" does, and both were
+            # wrong until it was measured: on Microsoft David the marker costs
+            # 0.205s of audible interruption mid-sentence, and on Kokoro it
+            # produces no token at all. Removing it is better on one engine and
+            # free on the other.
+            #
+            # This lived further down normalize() here, past every stage the
+            # harnesses compare, which is precisely why the two halves could
+            # each write the disagreement down and still never see it.
+            text = text.translate(_SUPERSCRIPT_DIGITS)
+            text = _FOOTNOTE.sub("", text)
+        elif name == "dot_leaders":
+            text = _DOT_LEADER_RUN.sub(" ", text)
+        elif name == "repeated_punctuation":
+            text = _ELLIPSIS_RUN.sub("…", text)
+            text = _DOUBLE_PERIOD.sub(".", text)
+            text = _BANG_QUESTION_RUN.sub(r"\1", text)
+        elif name == "emoji" and setting == "skip":
+            keep = set(_owned_symbols())
+            # The shared lists are the authority on what gets spoken, so a
+            # character they claim is never an emoji however it is
+            # classified. Copyright, registered and trademark are all
+            # Extended_Pictographic, and deleting them takes the words the
+            # symbols list exists to produce with them.
+            text = _EMOJI.sub(
+                lambda m: "".join(c for c in m.group(0) if c in keep), text)
+    return text
+
+
 def normalize(text: str, *, skip_code: bool = False, urls: str = "domain") -> str:
     """Return text shaped for speech. Order matters: structure, then content."""
     if not text:
         return ""
 
-    text = unicodedata.normalize("NFKC", text)
-    text = text.translate(_ZERO_WIDTH).translate(_QUOTES)
     text = _CRLF.sub("\n", text)
-
-    # Contents entries become just their title; the page number is a reference,
-    # not something to say. Any other leaders collapse to a pause.
+    # A contents entry is a whole-line shape: title, leader, page number, end of
+    # line. It has to be recognised before the shared dot_leaders rule turns the
+    # leader into a space, because after that there is nothing left to tell a
+    # contents line from a sentence with a number in it, and the page number
+    # gets read aloud. This removes a number rather than transforming a leader,
+    # so it is not the shared rule wearing a different name.
     text = _TOC_LINE.sub(r"\1.", text)
-    text = _DOT_LEADER.sub(". ", text)
     text = _BARE_NUMBER_LINE.sub("", text)
+
+    # Before NFKC, which turns a superscript digit into an ordinary one and so
+    # would convert a footnote marker into content instead of removing it.
+    text = apply_collapse(text)
+    text = _nfkc_preserving_symbols(text)
 
     text = _FENCE.sub(" \n\n Code block. \n\n " if skip_code else " \n\n ", text)
     text = _INLINE_CODE.sub(r"\1", text)
@@ -146,7 +332,6 @@ def normalize(text: str, *, skip_code: bool = False, urls: str = "domain") -> st
     text = _MD_EMPH.sub(r"\2", text)
 
     text = _urls(text, urls)
-    text = _FOOTNOTE.sub("", text)
 
     text = apply_expansions(text)
     text = symbols.apply(text)
