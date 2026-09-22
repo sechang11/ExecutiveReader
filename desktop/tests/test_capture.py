@@ -1470,6 +1470,75 @@ def test_reading_the_screen_reads_the_display_being_looked_at():
     assert ocr.choose_monitor(one, None)["width"] == 1920
 
 
+def test_one_shared_line_is_not_a_scroll():
+    """Switching to a different conversation has to start a new clipboard.
+
+    Applications keep fixed furniture inside a watched area: a heading, a
+    prompt box, a footer. It is in every recognition, so it matches whatever
+    else is on screen, and taking that single line as evidence of a scroll
+    appended a whole new conversation to the clipboard of the last one.
+    """
+    from executive_reader.capture import region as region_mod
+    nl = chr(10)
+
+    old = nl.join(["Ask anything", "We fixed the scaling bug today.",
+                   "It was the monitor at 125 percent."])
+    new = nl.join(["It was the monitor at 125 percent.",
+                   "Something from a completely different chat.",
+                   "And another line of it."])
+    assert region_mod.continuation(old, new) is None
+
+    # Two lines in common is a scroll, and only the new part is returned.
+    scrolled = nl.join(["We fixed the scaling bug today.",
+                        "It was the monitor at 125 percent.",
+                        "The picker now converts the rectangle.",
+                        "And the highlight lands on the word."])
+    tail = region_mod.continuation(old, scrolled)
+    assert tail == nl.join(["The picker now converts the rectangle.",
+                            "And the highlight lands on the word."]), repr(tail)
+
+
+def test_a_screen_that_did_not_change_is_still_a_continuation():
+    """Everything that was there is still there: nothing new to read, but
+    not a different thing either."""
+    from executive_reader.capture import region as region_mod
+    nl = chr(10)
+    same = nl.join(["One line here.", "Two lines here."])
+    assert region_mod.continuation(same, same) == ""
+    # A single line that is the whole of both captures is containment, not
+    # coincidence, so it still counts.
+    assert region_mod.continuation("Only this.", "Only this.") == ""
+
+
+def test_a_watcher_says_so_when_it_cannot_read_the_area():
+    """Silence is what a working watcher sounds like on a still screen, so a
+    broken one has to speak up or the two are indistinguishable."""
+    import time
+
+    from executive_reader.capture import region as region_mod
+
+    def explode():
+        raise RuntimeError("the display went away")
+
+    said: list[str] = []
+    watcher = region_mod.RegionWatcher((0, 0, 10, 10), lambda _c: None)
+    watcher.on_error = said.append
+    watcher.interval = 0.01
+    watcher._look = explode
+    watcher.start()
+    try:
+        deadline = time.time() + 5
+        while not said and time.time() < deadline:
+            time.sleep(0.02)
+        assert said, "a watcher that could not read anything said nothing"
+        assert "display went away" in said[0], said[0]
+        # Once, not every couple of seconds for as long as it is running.
+        time.sleep(0.15)
+        assert len(said) == 1, said
+    finally:
+        watcher.stop()
+
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

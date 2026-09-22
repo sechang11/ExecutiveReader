@@ -19,10 +19,26 @@ _CRLF = re.compile(r"\r\n?")
 _TOC_LINE = re.compile(r"^([^\n]*?)[ \t]*\.(?:[ \t]*\.){3,}[ \t]*\d{1,4}[ \t]*$", re.M)
 _BARE_NUMBER_LINE = re.compile(r"^[ \t]*\d{1,4}[ \t]*$", re.M)
 
-# PDFs and emails hard-wrap prose mid-sentence. Rejoin those lines, or every
-# wrap becomes a false sentence boundary and the voice stops in the wrong place.
+# PDFs, emails and anything recognised off the screen hard-wrap prose
+# mid-sentence. Rejoin those lines, or every wrap becomes a false sentence
+# boundary and the voice stops in the wrong place.
 _HYPHEN_WRAP = re.compile(r"([a-z])-\n([a-z])")
-_SOFT_WRAP = re.compile(r"([a-z,;:])\n(?=[a-z(])")
+# What decides a wrap is the line that follows, not the line that ends.
+#
+# This used to require the first line to end in a lowercase letter or a comma,
+# which left every line ending in an acronym, a number or a bracket broken in
+# half: "The LG" / "is scaled", "I ran 253" / "tests at noon". Technical prose
+# ends lines that way constantly, and recognised screen text is wrapped at
+# every line by definition, so the voice was stopping mid-sentence over and
+# over and putting a full stop where there was none.
+#
+# A following line that starts lowercase is the evidence that matters. Prose
+# does not begin a sentence in lower case, and a heading is not followed by
+# one either, so the heading rule below keeps what it had.
+# The indent after the break is eaten too. A wrapped list item or a quoted
+# block indents its continuation, and requiring the lowercase letter to sit
+# immediately after the newline missed every one of them.
+_SOFT_WRAP = re.compile(r"([A-Za-z0-9,;:)\]\"'%])\n[ \t]*(?=[a-z(])")
 # A short line with no terminator followed by a capital really is a heading.
 _HEADING_LINE = re.compile(r"^([^\n]{1,70}[A-Za-z0-9\"')\]])\n(?=[A-Z])", re.M)
 
@@ -302,6 +318,55 @@ def apply_collapse(text: str) -> str:
     return text
 
 
+#: What already ends a thought, so nothing needs adding.
+_ENDS_A_THOUGHT = ".!?:;,"
+
+
+def flatten_lists(text: str) -> str:
+    """Strip list markers, and close each item so it is spoken as one.
+
+    The marker is the only thing saying where an item ends. Removing it and
+    leaving the lines bare let the wrap rule downstream run a whole list into
+    one breathless sentence: "wash the car feed the cat call the bank".
+
+    An item is closed when the next marker arrives rather than at every line,
+    so an item that wraps over two lines still joins into one sentence.
+    """
+    lines = text.splitlines()
+    out: list[str] = []
+
+    def close() -> None:
+        for i in range(len(out) - 1, -1, -1):
+            if out[i].strip():
+                if out[i].rstrip()[-1:] not in _ENDS_A_THOUGHT:
+                    out[i] = out[i].rstrip() + "."
+                return
+            return
+
+    started = False
+    for line in lines:
+        if _MD_BULLET.match(line):
+            if started:
+                close()
+            else:
+                # A blank line between the lead-in and the first item, so
+                # "Things to do:" is not joined onto "wash the car" while
+                # every other item stands on its own.
+                close()
+                if out and out[-1].strip():
+                    out.append("")
+            started = True
+            out.append(_MD_BULLET.sub("", line, count=1))
+            continue
+        if started and not line.strip():
+            close()
+            started = False
+        out.append(line)
+    if started:
+        close()
+    return chr(10).join(out)
+
+
 def normalize(text: str, *, skip_code: bool = False, urls: str = "domain") -> str:
     """Return text shaped for speech. Order matters: structure, then content."""
     if not text:
@@ -328,7 +393,7 @@ def normalize(text: str, *, skip_code: bool = False, urls: str = "domain") -> st
     text = _MD_IMG.sub(lambda m: f" image, {m.group(1)} " if m.group(1) else " image ", text)
     text = _MD_LINK.sub(r"\1", text)
     text = _MD_HEAD.sub("", text)
-    text = _MD_BULLET.sub("", text)
+    text = flatten_lists(text)
     text = _MD_EMPH.sub(r"\2", text)
 
     text = _urls(text, urls)

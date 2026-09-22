@@ -417,6 +417,83 @@ def test_reading_now_reads_the_area_when_one_was_chosen():
             tray.tray.hide()
 
 
+def test_a_scroll_moves_the_highlight_instead_of_leaving_it_behind():
+    """A word box says where a word was when the picture was taken.
+
+    Scrolling moves the text out from under every one of them, so keeping
+    them and adding the new ones left the marker sitting over whatever had
+    moved into that spot, or over blank background.
+    """
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.app import App
+    from executive_reader.capture.region import Capture, Word
+    from executive_reader.ui.screen_tab import ScreenTab
+
+    with own_data_dir():
+        app = App()
+        tab = ScreenTab(app)
+        try:
+            first = Capture(text="The opening line of it.",
+                            words=[Word("The", 10, 10, 30, 12),
+                                   Word("opening", 45, 10, 60, 12)])
+            tab._add_capture(first)
+            assert tab._latest is first
+            assert len(tab._latest.words) == 2
+
+            # The same area after a scroll: everything visible, at new
+            # positions, and only the tail is new text.
+            after = Capture(text="A line the scroll brought in.",
+                            words=[Word("The", 10, 400, 30, 12),
+                                   Word("opening", 45, 400, 60, 12),
+                                   Word("brought", 10, 420, 55, 12)])
+            after.continues = True
+            tab._add_capture(after)
+
+            head = tab._captures[0]
+            assert "scroll brought in" in head.text
+            assert "opening line" in head.text, "the earlier text was lost"
+            assert len(head.words) == 3, head.words
+            # Nothing from before the scroll survived at its old position.
+            assert all(w.top >= 400 for w in head.words), head.words
+            assert tab._latest is head
+        finally:
+            tab.shutdown()
+            app.shutdown()
+
+
+def test_the_marker_comes_off_the_screen_while_the_area_changes():
+    """Between one recognition and the next there is nowhere correct to draw,
+    and a marker left over the old position is the version that looks
+    broken."""
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.app import App
+    from executive_reader.capture.region import Capture, Word
+    from executive_reader.ui.screen_tab import ScreenTab
+
+    with own_data_dir():
+        app = App()
+        tab = ScreenTab(app)
+        try:
+            shot = Capture(text="Something to say here.",
+                           words=[Word("Something", 10, 10, 70, 12)])
+            tab._add_capture(shot)
+            # Pretend a sentence is mid-flight, with words queued.
+            tab._word_queue = [(shot.words[0], 100)]
+            tab._word_timer.start(100)
+
+            tab._add_capture(Capture(text="A different screen entirely.",
+                                     words=[Word("different", 10, 90, 60, 12)]))
+            assert tab._word_queue == [], "kept stepping through stale boxes"
+            assert not tab._word_timer.isActive()
+        finally:
+            tab.shutdown()
+            app.shutdown()
+
+
 # --- the command line ----------------------------------------------------
 
 def test_command_line_accepts_the_documented_flags():

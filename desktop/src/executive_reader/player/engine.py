@@ -19,6 +19,7 @@ from ..textproc.pronounce import Dictionary
 from ..textproc.segment import segment as split_segments
 from ..tts.registry import Registry
 from .audio import AudioSink, AudioUnavailable
+from .stretch import time_stretch
 
 IDLE, PLAYING, PAUSED = "idle", "playing", "paused"
 
@@ -54,6 +55,10 @@ class Reader:
         self._ack = threading.Event()       # playback thread finished reacting
         self._abort_reason = ""
         self._resume_frame = 0
+        #: Audio handed back to the playback loop instead of being rendered:
+        #: (index, samples, rate). Used when the speed changes mid-sentence.
+        self._pending: tuple | None = None
+        self._speed_was = 0.0
         self._quit = False
         self._token = 0                     # bumped when voice or speed changes
         self._cache: dict[int, tuple[int, np.ndarray, int]] = {}
@@ -156,14 +161,37 @@ class Reader:
 
     # --- settings --------------------------------------------------------
     def set_speed(self, speed: float) -> None:
+        """Change pace without losing your place.
+
+        This used to throw the sentence away and start it again, which is the
+        one thing a speed control must not do: you change speed because you
+        are listening, and the answer was to hear the last ten seconds over.
+
+        It cannot re-render either. Asking the voice for the same sentence at
+        a new speed takes about two seconds, and two seconds of silence in the
+        middle of a sentence is worse than the restart was. So the audio
+        already in hand is stretched instead, which takes about fifteen
+        milliseconds, and playback carries on from the same word. Sentences
+        after this one are rendered at the new speed as usual, which the voice
+        does better than stretching.
+        """
         speed = max(0.5, min(4.0, float(speed)))
         cap = self.registry.max_speed(self.config.engine)
+        playing = self.state == PLAYING
         with self._lock:
+            was = self.config.speed
             self.config.speed = min(speed, cap)
+            now = self.config.speed
+            if abs(now - was) < 0.001 or now <= 0:
+                return
             self._invalidate()
-            self._resume_frame = 0
-        if self.state == PLAYING:
-            self._interrupt("seek")  # re-render this sentence at the new speed
+            self._speed_was = was
+            if not playing:
+                # Paused or stopped: the saved position was measured in audio
+                # at the old pace and the next render will be at the new one.
+                self._resume_frame = int(self._resume_frame * was / now)
+        if playing:
+            self._interrupt("speed")
 
     def nudge_speed(self, delta: float) -> float:
         self.set_speed(round(self.config.speed + delta, 2))
@@ -328,6 +356,7 @@ class Reader:
             with self._lock:
                 idx, total = self.index, len(self.segments)
                 start_frame = self._resume_frame
+                carried, self._pending = self._pending, None
             if total == 0:
                 self._gate.clear()
                 continue
@@ -338,7 +367,12 @@ class Reader:
                 continue
 
             try:
-                samples, rate = self._render(idx)
+                if carried is not None and carried[0] == idx:
+                    # Already in hand, stretched to the new speed. Rendering
+                    # it again would be two seconds of silence for nothing.
+                    samples, rate = carried[1], carried[2]
+                else:
+                    samples, rate = self._render(idx)
             except AudioUnavailable as exc:
                 self._gate.clear()
                 self._set_state(IDLE)
@@ -375,6 +409,15 @@ class Reader:
             with self._lock:
                 if reason == "pause":
                     self._resume_frame = reached
+                elif reason == "speed":
+                    was = self._speed_was or self.config.speed
+                    now = self.config.speed
+                    self._speed_was = 0.0
+                    # Same place in the sentence, said at the new pace. A
+                    # frame count is a length of audio, and the audio just
+                    # got shorter or longer, so the position moves with it.
+                    self._pending = (idx, time_stretch(samples, rate, now / was), rate)
+                    self._resume_frame = max(0, int(reached * was / now))
                 elif reason in ("stop", "seek"):
                     self._resume_frame = 0
                 elif self.index == idx:

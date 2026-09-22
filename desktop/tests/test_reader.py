@@ -229,6 +229,101 @@ def test_a_straight_read_synthesizes_each_segment_once():
     assert not repeated, (str(len(repeated)) + " of " + str(total)
                           + " segments were synthesized more than once")
 
+
+def test_changing_speed_carries_on_from_the_same_word():
+    """A speed control must not cost you your place.
+
+    It used to throw the sentence away and start it again, so changing speed
+    while listening meant hearing the last ten seconds over. Re-rendering is
+    not the answer either: asking the voice for the same sentence again takes
+    about two seconds, and two seconds of silence mid-sentence is worse than
+    the restart. The audio in hand is stretched instead.
+    """
+    reader, reg, sink = make_reader()
+    plays: list[tuple[int, int]] = []
+    underneath = sink.play
+
+    def watched(samples, rate, volume, should_abort, start_frame=0):
+        plays.append((len(samples), start_frame))
+        return underneath(samples, rate, volume, should_abort, start_frame)
+
+    sink.play = watched
+    announced: list[int] = []
+    started = threading.Event()
+    reader.on_segment = lambda i, t, n: (announced.append(i), started.set())
+
+    reader.load(DOC)
+    assert started.wait(5)
+    time.sleep(0.08)
+    before = reader.index
+    reader.set_speed(2.0)
+    time.sleep(0.08)
+    reader.stop()
+
+    assert len(plays) >= 2, plays
+    # Still the same sentence, and it did not start over.
+    assert reader.index == before or reader.index == before + 1, reader.index
+    assert plays[1][1] > 0, "the sentence restarted from the beginning: %r" % (plays,)
+    # Twice the speed is half the audio, so the same words take half as long.
+    assert plays[1][0] < plays[0][0], plays
+    # And the sentence was not announced a second time, which is what would
+    # make the player jump back to the start of it.
+    assert announced.count(0) == 1, announced
+    reader.shutdown()
+
+
+def test_the_new_position_is_where_the_old_one_was_in_the_text():
+    """Half way through at one speed is half way through at any speed."""
+    reader, _reg, sink = make_reader()
+    plays: list[tuple[int, int]] = []
+    underneath = sink.play
+
+    def watched(samples, rate, volume, should_abort, start_frame=0):
+        plays.append((len(samples), start_frame))
+        return underneath(samples, rate, volume, should_abort, start_frame)
+
+    sink.play = watched
+    started = threading.Event()
+    reader.on_segment = lambda i, t, n: started.set()
+    reader.load(DOC)
+    assert started.wait(5)
+    time.sleep(0.1)
+    reader.set_speed(2.0)
+    time.sleep(0.05)
+    reader.stop()
+
+    length_before, _ = plays[0]
+    length_after, resume_at = plays[1]
+    # Where playback resumed, as a fraction of the sentence, must match where
+    # it left off. Generous tolerance: real time decides where it stopped.
+    assert 0 < resume_at < length_after, (resume_at, length_after)
+    assert abs(length_after * 2 - length_before) < length_before * 0.1, plays
+    reader.shutdown()
+
+
+def test_changing_speed_while_paused_keeps_the_place_too():
+    reader, _reg, _sink = make_reader()
+    started = threading.Event()
+    reader.on_segment = lambda i, t, n: started.set()
+    reader.load(DOC)
+    assert started.wait(5)
+    time.sleep(0.1)
+    reader.pause()
+    frame = reader._resume_frame
+    assert frame > 0
+
+    reader.set_speed(2.0)
+    # Half the audio for the same words, so half the frame count.
+    assert abs(reader._resume_frame - frame // 2) <= 2, (frame, reader._resume_frame)
+    reader.set_speed(1.0)
+    assert abs(reader._resume_frame - frame) <= 4, (frame, reader._resume_frame)
+    # Setting the speed it is already at must not move anything.
+    where = reader._resume_frame
+    reader.set_speed(1.0)
+    assert reader._resume_frame == where
+    reader.shutdown()
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

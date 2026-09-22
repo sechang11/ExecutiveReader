@@ -32,6 +32,15 @@ DEFAULT_INTERVAL = 2.0
 #: interrupting anything for.
 MIN_CHARS = 20
 
+#: How many lines have to be shared before a capture counts as carrying on
+#: from the one before it rather than being a different thing to read.
+_MIN_OVERLAP_LINES = 2
+
+#: Recognition failing once is a flicker, a screen lock or a window moving
+#: over the area. Failing this many times running is something to say out
+#: loud, because the symptom is silence and silence looks like working.
+_FAILURES_BEFORE_SAYING = 3
+
 
 @dataclass
 class Word:
@@ -187,6 +196,16 @@ def continuation(previous: str, current: str) -> str | None:
     # Longest overlap first: a short one is more likely to be a coincidence.
     for size in range(limit, 0, -1):
         if old_keys[-size:] == new_keys[:size]:
+            # One shared line is not evidence of a scroll. Applications keep
+            # fixed furniture inside a watched area -- a heading, a footer, a
+            # prompt box -- and it matches whatever else is on screen. Taking
+            # that as a continuation appends a different conversation to the
+            # clipboard of the last one instead of starting a new one, which
+            # is exactly what it looked like when switching conversations
+            # produced no new row. Total containment still counts: everything
+            # that was there is still there.
+            if size < _MIN_OVERLAP_LINES and size < limit:
+                return None
             rest = new_lines[size:]
             return chr(10).join(rest) if rest else ""
     return None
@@ -207,6 +226,7 @@ class RegionWatcher:
 
         self._last_key = ""
         self._last_text = ""
+        self._failures = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -232,27 +252,45 @@ class RegionWatcher:
     def _loop(self) -> None:
         while not self._stop.is_set():
             try:
-                shot = read_region(self.rect)
-                key = _key(shot.text)
-                if key and key != self._last_key and len(shot.text) >= self.min_chars:
-                    self._last_key = key
-                    # A scroll continues the last capture rather than starting
-                    # a new one, so the rows stay one row per thing read.
-                    tail = continuation(self._last_text, shot.text)
-                    self._last_text = shot.text
-                    if tail is not None:
-                        if tail.strip():
-                            shot.continues = True
-                            shot.text = tail
-                            self.on_capture(shot)
-                        continue
-                    self.on_capture(shot)
+                self._look()
+                self._failures = 0
             except ocr.OCRUnavailable as exc:
                 self.on_error(str(exc))
                 return
-            except Exception:
-                pass
+            except Exception as exc:
+                # Swallowed silently, this looked like an area that had
+                # simply stopped noticing anything, which is the same thing
+                # a working watcher looks like on a screen that is not
+                # changing. Said out loud it is a fault to fix.
+                self._failures += 1
+                if self._failures == _FAILURES_BEFORE_SAYING:
+                    self.on_error("Cannot read that area right now: "
+                                  + (str(exc) or exc.__class__.__name__))
             self._stop.wait(self.interval)
+
+    def _look(self) -> None:
+        """One recognition, reported only if it is genuinely new.
+
+        Was written inline with a `continue` that skipped the wait at the
+        bottom of the loop, so noticing a scroll cost an extra recognition
+        immediately afterwards.
+        """
+        shot = read_region(self.rect)
+        key = _key(shot.text)
+        if not key or key == self._last_key or len(shot.text) < self.min_chars:
+            return
+        self._last_key = key
+        # A scroll continues the last capture rather than starting a new one,
+        # so the rows stay one row per thing read.
+        tail = continuation(self._last_text, shot.text)
+        self._last_text = shot.text
+        if tail is None:
+            self.on_capture(shot)
+            return
+        if tail.strip():
+            shot.continues = True
+            shot.text = tail
+            self.on_capture(shot)
 
 
 def words_for(capture: Capture, sentence: str) -> list:

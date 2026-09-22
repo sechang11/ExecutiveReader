@@ -489,6 +489,81 @@ def test_every_shared_file_is_accounted_for():
     assert len(on_disk) >= 8, "only found " + str(len(on_disk)) + " shared files"
 
 
+def test_a_wrapped_line_does_not_become_a_false_full_stop():
+    """The reason the voice sounded like it was skipping words.
+
+    Rejoining a hard wrap used to need the broken line to end in a lowercase
+    letter or a comma. Technical prose ends lines on acronyms, numbers and
+    brackets constantly, and recognised screen text is wrapped at every
+    single line, so sentence after sentence was cut in half and spoken as two
+    with a full stop dropped into the middle of it.
+
+    What decides a wrap is the line that follows. Prose does not begin a
+    sentence in lower case.
+    """
+    from executive_reader.textproc.normalize import normalize
+    from executive_reader.textproc.segment import segment
+    nl = chr(10)
+
+    def spoken(text):
+        return segment(normalize(text), 320)
+
+    # Ends on an acronym.
+    assert spoken("The LG" + nl + "is scaled and the others are not.") == [
+        "The LG is scaled and the others are not."]
+    # Ends on a number.
+    assert spoken("I ran 253" + nl + "tests before lunch.") == [
+        "I ran 253 tests before lunch."]
+    # Ends on a bracket, and the next line is indented.
+    assert spoken("He left (quietly)" + nl + "   before anyone noticed.") == [
+        "He left (quietly) before anyone noticed."]
+
+    # A whole recognised screenful comes back as whole sentences.
+    screen = nl.join([
+        "Found it, and it explains both symptoms at once. Your middle",
+        "monitor runs at 125 percent, and the app never knew. The LG",
+        "is scaled; the Samsung and the Acer are not."])
+    assert spoken(screen) == [
+        "Found it, and it explains both symptoms at once.",
+        "Your middle monitor runs at 125 percent, and the app never knew.",
+        "The LG is scaled; the Samsung and the Acer are not."]
+
+
+def test_a_heading_is_still_not_glued_to_the_paragraph_under_it():
+    """The narrow rule existed to protect this, so widening it must not."""
+    from executive_reader.textproc.normalize import normalize
+    from executive_reader.textproc.segment import segment
+    nl = chr(10)
+
+    out = segment(normalize("Chapter Two" + nl + "The morning came quietly."), 320)
+    assert out == ["Chapter Two.", "The morning came quietly."], out
+
+
+def test_a_list_is_spoken_as_a_list_and_not_as_one_long_sentence():
+    """Stripping the marker threw away the only thing saying where an item
+    ended, so three items ran together into one breathless line."""
+    from executive_reader.textproc.normalize import normalize
+    from executive_reader.textproc.segment import segment
+    nl = chr(10)
+
+    out = segment(normalize(nl.join([
+        "Things to do:", "- wash the car", "- feed the cat",
+        "- call the bank"])), 320)
+    assert out == ["Things to do:", "wash the car.", "feed the cat.",
+                   "call the bank."], out
+
+    # An item that wraps is still one item.
+    wrapped = segment(normalize(nl.join([
+        "- wash the car and", "  then dry it properly", "- feed the cat"])), 320)
+    assert wrapped == ["wash the car and then dry it properly.",
+                       "feed the cat."], wrapped
+
+    # A numbered list was never broken and must stay that way.
+    numbered = segment(normalize(nl.join([
+        "1. open the door", "2. walk inside", "3. sit down"])), 320)
+    assert len(numbered) == 3, numbered
+
+
 if __name__ == "__main__":
     passed = failed = 0
     for name, fn in sorted(globals().items()):

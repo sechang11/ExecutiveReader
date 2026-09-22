@@ -1,8 +1,16 @@
 """Windows SAPI voices.
 
 The zero-setup tier. Every Windows machine already has these, so the app can
-speak before anything is downloaded. Quality depends on which voices are
-installed; Windows 11 ships the Microsoft Natural voices, which are decent.
+speak before anything is downloaded.
+
+Quality depends entirely on which voices are installed, and a stock Windows 11
+has only David, Zira and Mark, which are the old robotic ones. The Microsoft
+Natural voices are far better but are an optional download under Settings,
+Accessibility, Narrator, and they register with the newer speech platform
+rather than with the interface used here, so installing them does not
+necessarily make them appear in this list. Said plainly because this docstring
+used to claim Windows 11 ships them, which set the wrong expectation of the
+whole tier.
 
 Audio is captured into a memory stream rather than sent straight to the
 speakers, so SAPI shares the same player, speed control and stop behaviour as

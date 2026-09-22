@@ -42,12 +42,28 @@ class Addon:
 
     @property
     def summary(self) -> str:
+        """What installing it would change, including for English.
+
+        This used to advertise other languages only, which undersells it and
+        left the impression that English had nothing to gain. Kokoro was
+        trained on eSpeak's phonemes, and without eSpeak the app works from a
+        dictionary and letter-to-sound rules deliberately shaped to imitate
+        them. Common words come out the same either way; names, acronyms and
+        anything not in the dictionary are where the approximation shows, and
+        a word given the wrong sounds is the kind of wrong that makes a whole
+        sentence sound slurred.
+        """
         if self.present:
-            return ("eSpeak found, so the non-English voices work: "
-                    + ", ".join(UNLOCKS) + ".")
-        return ("English works without anything extra. Installing eSpeak NG "
-                "yourself adds " + ", ".join(UNLOCKS) + ". It is not bundled "
-                "because its licence would cover this whole application.")
+            return ("eSpeak found. Non-English voices work (" + ", ".join(UNLOCKS)
+                    + "), and the neural voices are getting the phonemes they "
+                    "were trained on rather than an imitation of them.")
+        return ("English works without anything extra, from a built-in "
+                "dictionary. Installing eSpeak NG yourself adds "
+                + ", ".join(UNLOCKS) + ", and sharpens English too: the "
+                "neural voices were trained on eSpeak's phonemes, so unusual "
+                "words and names are pronounced better with it than with the "
+                "imitation of it used otherwise. It is not bundled because "
+                "its licence would cover this whole application.")
 
 
 def detect() -> Addon:

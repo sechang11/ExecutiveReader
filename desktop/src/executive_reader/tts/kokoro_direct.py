@@ -94,14 +94,40 @@ def tokenize(ipa: str, vocab: dict[str, int] | None = None) -> tuple[list[int], 
                 dropped.append(ch)
             continue
         ids.append(int(token))
-    return ids[:MAX_TOKENS], dropped
+    # Not truncated here. This used to return ids[:MAX_TOKENS], which meant
+    # chunk() below could never see a run long enough to split and anything
+    # past 508 phonemes was silently cut off mid-sentence. Splitting is the
+    # caller's job and it does it; the limit belongs there, not here.
+    return ids, dropped
+
+
+#: The alphabet's own space, which is the only word boundary a phoneme run
+#: still carries by the time it is a list of ids.
+_SPACE_TOKEN = 16
 
 
 def chunk(ids: list[int], limit: int = MAX_TOKENS) -> list[list[int]]:
-    """Split an over-long phoneme run into model-sized pieces."""
+    """Split an over-long phoneme run into model-sized pieces.
+
+    Cut at a word boundary where there is one near the limit. Each piece is
+    synthesised separately and the audio joined, so a cut in the middle of a
+    word puts a seam inside it; a cut at a space puts the seam where a small
+    join is inaudible anyway.
+    """
     if len(ids) <= limit:
         return [ids] if ids else []
-    return [ids[i:i + limit] for i in range(0, len(ids), limit)]
+    pieces: list[list[int]] = []
+    at = 0
+    while at < len(ids):
+        end = min(at + limit, len(ids))
+        if end < len(ids):
+            # Look back for a space, but not so far that pieces become tiny.
+            window = ids[at + limit // 2:end]
+            if _SPACE_TOKEN in window:
+                end = at + limit // 2 + len(window) - 1 - window[::-1].index(_SPACE_TOKEN)
+        pieces.append(ids[at:end])
+        at = end
+    return [p for p in pieces if p]
 
 
 class KokoroModel:

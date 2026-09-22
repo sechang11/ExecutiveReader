@@ -58,6 +58,9 @@ class ScreenTab(QWidget):
         self._captures: list = []
         self._rect: tuple | None = None
         self._live_capture: region_mod.Capture | None = None
+        #: The newest recognition of the area. Only this one knows where the
+        #: words are now, so only this one may drive the highlight.
+        self._latest: region_mod.Capture | None = None
         self._window = ClipboardWindow()
         self._word_timer = QTimer(self)
         self._word_timer.setSingleShot(True)
@@ -295,7 +298,13 @@ class ScreenTab(QWidget):
         if getattr(capture, "continues", False) and self._captures:
             head = self._captures[0]
             head.text = (head.text + chr(10) + capture.text).strip()
-            head.words = list(head.words) + list(capture.words)
+            # Replaced, not extended. A box says where a word was when the
+            # picture was taken, and a scroll moves the text out from under
+            # every one of them. The new recognition covers the whole visible
+            # area, including the lines that scrolled up, so it describes
+            # where all of it is now; the old boxes describe nothing.
+            head.words = list(capture.words)
+            self._forget_highlight(head)
             if self.rows.count():
                 self.rows.item(0).setText(self._label(head))
             # A window open on this one has just gained text; show it.
@@ -306,6 +315,7 @@ class ScreenTab(QWidget):
                 # restarting it from the top.
                 self.app.read_text(capture.text, "Screen area")
             return
+        self._forget_highlight(capture)
         self._captures.insert(0, capture)
         del self._captures[MAX_ROWS:]
         item = QListWidgetItem(self._label(capture))
@@ -319,6 +329,19 @@ class ScreenTab(QWidget):
             self.status.emit("New text found; locked, so it is waiting for you.")
             return
         self._speak(capture)
+
+    def _forget_highlight(self, latest) -> None:
+        """Take the marker off the screen until it can be placed again.
+
+        Whatever is drawn now was positioned against a picture that no longer
+        matches the screen, so it is pointing at the wrong words at best and
+        at blank space at worst. Leaving it there while the next sentence is
+        worked out is the version that looks broken.
+        """
+        self._latest = latest
+        self._word_timer.stop()
+        self._word_queue = []
+        self._highlight.clear()
 
     def replay(self, index: int) -> None:
         """Read one of the recent captures, chosen from the player."""
@@ -395,9 +418,14 @@ class ScreenTab(QWidget):
         """
         self._word_timer.stop()
         self._word_queue = []
-        if not self.chk_highlight.isChecked() or self._live_capture is None:
+        # Against the newest recognition, not against whatever is being read.
+        # If the words being spoken are not on screen any more, there is
+        # nowhere to put the marker and nothing is the right answer.
+        if not self.chk_highlight.isChecked():
             return
-        words = region_mod.words_for(self._live_capture, sentence)
+        if self._latest is None and self._live_capture is None:
+            return
+        words = region_mod.words_for(self._latest or self._live_capture, sentence)
         if not words:
             self._highlight.clear()
             return
