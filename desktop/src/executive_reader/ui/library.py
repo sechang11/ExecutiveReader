@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox,
                                QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
 from ..tts.piper_engine import CATALOG as PIPER_CATALOG
+from .claude_tab import ClaudeTab
 from .screen_tab import ScreenTab
 from ..textproc import shared_rules
 from ..textproc.pronounce import Rule
@@ -40,12 +41,18 @@ class Library(QMainWindow):
         self.resize(860, 620)
 
         tabs = QTabWidget()
-        # First, because it is the tab that answers "how do I make it read
-        # something". The shortcuts are on the buttons rather than in a table
-        # somewhere, so they get learned by use.
+        # Claude first, because reading Claude is what this is for and it is
+        # also the route that needs nothing set up. It was a checkbox on the
+        # sixth tab while the screen recogniser, which is the last resort,
+        # had the first one and all the buttons. Someone following the
+        # interface was led straight to the worst way of doing the main job.
+        self.claude = ClaudeTab(app)
+        self.claude.status.connect(lambda message: app.on_status(message))
+        tabs.addTab(self.claude, "Claude")
+        # Second: how to make it read anything else.
         self.screen = ScreenTab(app)
         self.screen.status.connect(lambda message: app.on_status(message))
-        tabs.addTab(self.screen, "Screen")
+        tabs.addTab(self.screen, "Anything else")
         tabs.addTab(self._history_tab(), "History")
         tabs.addTab(self._bookmarks_tab(), "Bookmarks")
         tabs.addTab(self._voices_tab(), "Voices")
@@ -412,13 +419,16 @@ class Library(QMainWindow):
         self.chk_clip.setChecked(cfg.clipboard_watch)
         layout.addWidget(self.chk_clip)
 
-        self.chk_claude = QCheckBox("Read new Claude Code replies aloud")
-        self.chk_claude.setChecked(cfg.claude_watch)
-        layout.addWidget(self.chk_claude)
-
-        self.chk_thinking = QCheckBox("Include Claude's thinking")
-        self.chk_thinking.setChecked(cfg.claude_read_thinking)
-        layout.addWidget(self.chk_thinking)
+        # The Claude switches live on the Claude tab. They were here as well,
+        # and two checkboxes bound to one setting is a way to lose it:
+        # turning it on over there and then saving anything here wrote back
+        # whatever this copy happened to be showing.
+        claude_note = QLabel(
+            "Reading Claude's replies, and whether to include the thinking, "
+            "are on the Claude tab.")
+        claude_note.setWordWrap(True)
+        claude_note.setStyleSheet("color:#888;")
+        layout.addWidget(claude_note)
 
         url_row = QHBoxLayout()
         url_row.addWidget(QLabel("Read links as"))
@@ -483,10 +493,8 @@ class Library(QMainWindow):
         cfg.skip_code_blocks = self.chk_code.isChecked()
         cfg.ocr_enabled = self.chk_ocr.isChecked()
         cfg.read_urls = self.url_mode.currentText()
-        cfg.claude_read_thinking = self.chk_thinking.isChecked()
         cfg.save()
         self.app.set_clipboard_watch(self.chk_clip.isChecked())
-        self.app.set_claude_watch(self.chk_claude.isChecked())
         self.app.set_sleep_timer(self.sleep_spin.value())
         QMessageBox.information(self, "Saved", "Settings saved.")
 

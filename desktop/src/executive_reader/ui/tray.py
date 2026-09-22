@@ -77,6 +77,9 @@ class TrayApp(QObject):
         self._reading_window.read_from.connect(self._read_passage)
         self.player.open_item.connect(self._open_item)
         self.player.read_screen.connect(self._read_screen_or_area)
+        claude = getattr(self.library, "claude", None)
+        if claude is not None:
+            claude.watch_changed.connect(self._claude_watch_shown)
         screen = getattr(self.library, "screen", None)
         if screen is not None:
             screen.captures_changed.connect(self.player.set_recent)
@@ -107,6 +110,22 @@ class TrayApp(QObject):
             return
         if screen is not None:
             screen.open_current()
+
+    def _claude_watch_shown(self, on: bool) -> None:
+        """The tab changed it; show the same thing in the tray."""
+        self.act_claude.setChecked(bool(on))
+
+    def _set_claude_watch(self, on: bool) -> None:
+        """Follow Claude, from the tray. Kept in step with the Claude tab."""
+        self.app.config.claude_watch_chosen = True
+        self.app.set_claude_watch(on)
+        self.app.config.save()
+        claude = getattr(self.library, "claude", None)
+        if claude is not None:
+            claude.chk_watch.blockSignals(True)
+            claude.chk_watch.setChecked(bool(self.app.config.claude_watch))
+            claude.chk_watch.blockSignals(False)
+        self.act_claude.setChecked(bool(self.app.config.claude_watch))
 
     def _read_screen_or_area(self) -> None:
         """The area when one is chosen, the whole display when not."""
@@ -162,7 +181,12 @@ class TrayApp(QObject):
         self.act_locked.triggered.connect(
             lambda on: self._set_watch("locked" if on else "off"))
         menu.addSeparator()
-        menu.addAction("Read latest Claude session",
+        # The main job, reachable without opening anything.
+        self.act_claude = menu.addAction("Read Claude's replies as they arrive")
+        self.act_claude.setCheckable(True)
+        self.act_claude.setChecked(bool(self.app.config.claude_watch))
+        self.act_claude.triggered.connect(self._set_claude_watch)
+        menu.addAction("Read the last six Claude replies",
                        lambda: self.app.read_claude_session(last_n=6))
         menu.addSeparator()
         menu.addAction("Play / pause", self.app.toggle)

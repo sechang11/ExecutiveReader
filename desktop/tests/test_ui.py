@@ -23,9 +23,26 @@ install()
 SKIPPED = "SKIP"
 
 
+class _SilentSink:
+    """Stands in for the speakers.
+
+    `App()` builds a real Reader, and a real Reader opens a real audio device
+    the moment anything asks it to speak. Several tests here drive the screen
+    tab, and the screen tab speaks what it captures, so running the suite
+    played fixture text out loud on whatever machine ran it: "the opening
+    line of it", "some recognised words here". Tests do not get the speakers.
+    """
+
+    def play(self, samples, rate, volume, should_abort, start_frame=0):
+        return len(samples)
+
+    def close(self):
+        pass
+
+
 @contextlib.contextmanager
 def own_data_dir():
-    """Run against a throwaway data directory instead of the real one.
+    """Run against a throwaway data directory and silent audio.
 
     `App()` with no arguments loads the real config and opens the real
     database, and `App.shutdown()` writes both back. So these tests were
@@ -38,17 +55,21 @@ def own_data_dir():
     config leaves the database pointing at the real file.
     """
     from executive_reader import config as config_module
+    from executive_reader.player import engine as engine_module
     from executive_reader.store import db as db_module
 
-    saved = (config_module.data_dir, db_module.data_dir)
+    saved = (config_module.data_dir, db_module.data_dir,
+             engine_module.AudioSink)
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         here = Path(tmp)
         try:
             config_module.data_dir = lambda: here
             db_module.data_dir = lambda: here
+            engine_module.AudioSink = _SilentSink
             yield here
         finally:
-            config_module.data_dir, db_module.data_dir = saved
+            (config_module.data_dir, db_module.data_dir,
+             engine_module.AudioSink) = saved
 
 
 def _qt():
@@ -82,7 +103,11 @@ def test_the_tray_app_builds_and_shuts_down_cleanly():
             for action in actions:
                 if not action.isSeparator():
                     assert action.text(), "a menu entry has no label"
-            assert tray.library.centralWidget().count() == 6, "six tabs expected"
+            tabs = tray.library.centralWidget()
+            assert tabs.count() == 7, "seven tabs expected"
+            # Claude first: it is the job the app exists for and the one
+            # route that needs nothing chosen or recognised.
+            assert tabs.tabText(0) == "Claude", tabs.tabText(0)
         finally:
             tray.hotkeys.stop()
             app.shutdown()

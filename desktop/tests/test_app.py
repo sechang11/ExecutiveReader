@@ -10,6 +10,8 @@ Audio is stubbed. The point is the orchestration, not the sound.
 from __future__ import annotations
 
 import contextlib
+import json
+import os
 import sys
 import tempfile
 import threading
@@ -460,6 +462,17 @@ def _append_reply(path: Path, text: str) -> None:
         handle.write(_reply_line(text))
 
 
+def _wait_for(condition, seconds: float = 8.0) -> bool:
+    """Wait for a background watcher to notice something. Polls rather than
+    sleeps a fixed time, so a slow machine does not make a flaky test."""
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if condition():
+            return True
+        time.sleep(0.05)
+    return False
+
+
 def test_toggling_the_claude_watch_never_leaves_two_readers():
     """Off then straight back on used to leave the old thread running.
 
@@ -605,6 +618,97 @@ def test_the_reader_reports_how_long_a_sentence_takes():
         app.read(DOC)
         assert _wait(lambda: app.reader.segment_seconds > 0), "no duration reported"
         assert app.reader.segment_seconds < 5, app.reader.segment_seconds
+
+
+def test_the_watcher_moves_to_whichever_conversation_you_are_in():
+    """Starting a new conversation starts a new file.
+
+    The watcher picked a transcript once, when it was switched on, and stayed
+    on it. Open a new conversation and it went quiet for good, which does not
+    look like a fault: a watcher with nothing to say and a watcher watching
+    the wrong file are the same silence. This is why changing conversation
+    stopped producing anything to read.
+    """
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        root = Path(tmp)
+        first = root / "one.jsonl"
+        first.write_text(_reply_line("The first conversation."), encoding="utf-8")
+        os.utime(first, (1000, 1000))
+
+        saved = app_module.ct.latest_session
+        newest = {"path": first}
+        app_module.ct.latest_session = lambda *a, **k: newest["path"]
+        try:
+            with temp_app() as application:
+                heard: list[str] = []
+                application.on_document = lambda doc, total: heard.append(doc.text)
+                seen: list = []
+                application.on_claude_session = seen.append
+
+                application.set_claude_watch(True)
+                _wait_for(lambda: application._claude_tail is not None)
+                assert Path(application._claude_tail.path) == first
+
+                # A reply in the conversation being watched is read.
+                _append_reply(first, "A reply in the first conversation.")
+                assert _wait_for(lambda: any("first conversation" in h for h in heard)), \
+                    "the reply in the watched conversation was never read"
+
+                # Now a new conversation starts, and becomes the newest file.
+                second = root / "two.jsonl"
+                second.write_text(_reply_line("Opening the second."), encoding="utf-8")
+                os.utime(second, (2000, 2000))
+                newest["path"] = second
+
+                assert _wait_for(
+                    lambda: application._claude_tail is not None
+                    and Path(application._claude_tail.path) == second), \
+                    "stayed on the conversation it started with"
+                assert seen and Path(seen[-1]) == second, seen
+
+                # And a reply there is read, which is the whole point.
+                heard.clear()
+                _append_reply(second, "A reply in the second conversation.")
+                assert _wait_for(lambda: any("second conversation" in h for h in heard)), \
+                    "a reply in the new conversation was never read"
+
+                # Moving to a different conversation joins it at the end
+                # rather than reading everything already in it.
+                assert not any("Opening the second" in h for h in heard), heard
+                application.set_claude_watch(False)
+        finally:
+            app_module.ct.latest_session = saved
+
+
+def test_a_setting_nobody_answered_follows_the_default():
+    """Reading Claude used to be off, so every config written before now
+    carries that answer. Treating it as a decision would hide the new default
+    from exactly the people who already have the app."""
+    from executive_reader.config import Config
+
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        from executive_reader import config as config_module
+        saved = config_module.data_dir
+        try:
+            config_module.data_dir = lambda: Path(tmp)
+            path = Config.path()
+
+            # An old file: watching off, never explicitly chosen.
+            path.write_text(json.dumps({"claude_watch": False}), encoding="utf-8")
+            assert Config.load().claude_watch is True, "an old file blocked the default"
+
+            # Once it is answered, the answer is kept.
+            path.write_text(json.dumps({"claude_watch": False,
+                                        "claude_watch_chosen": True}),
+                            encoding="utf-8")
+            assert Config.load().claude_watch is False, "a deliberate no was ignored"
+            path.write_text(json.dumps({"claude_watch": True,
+                                        "claude_watch_chosen": True}),
+                            encoding="utf-8")
+            assert Config.load().claude_watch is True
+        finally:
+            config_module.data_dir = saved
+
 
 if __name__ == "__main__":
     passed = failed = skipped = 0

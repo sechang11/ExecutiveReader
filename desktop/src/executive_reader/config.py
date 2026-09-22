@@ -61,7 +61,16 @@ class Config:
     # --- claude transcript mode ---
     window_watch: str = "off"        # off | follow | locked
     window_watch_interval: float = 1.5
-    claude_watch: bool = False
+    #: Reading Claude's replies is what this application is for, and it is
+    #: also the one route that needs no setting up: the transcript is exact
+    #: text on disk, so there is no area to choose and nothing to recognise.
+    #: It was off by default and the switch was on the sixth tab, which left
+    #: the best route hidden behind the worst one.
+    #:
+    #: Follows the same shape as voice_chosen: on until somebody says
+    #: otherwise, and once they have said it their answer is kept.
+    claude_watch: bool = True
+    claude_watch_chosen: bool = False
     claude_read_thinking: bool = False
     claude_projects_dir: str = ""   # blank = %USERPROFILE%/.claude/projects
 
@@ -104,7 +113,15 @@ class Config:
         except (json.JSONDecodeError, OSError):
             return cls()
         known = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in raw.items() if k in known})
+        values = {k: v for k, v in raw.items() if k in known}
+        # A setting nobody has answered follows the default, even when an
+        # older file recorded one. Reading Claude's replies used to be off
+        # and buried; every config written before that changed carries the
+        # old answer, and treating it as a decision would hide the new
+        # default from exactly the people who already have the app.
+        if not values.get("claude_watch_chosen"):
+            values.pop("claude_watch", None)
+        return cls(**values)
 
     def save(self) -> None:
         tmp = self.path().with_suffix(".tmp")

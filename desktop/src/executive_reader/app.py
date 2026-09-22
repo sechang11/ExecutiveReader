@@ -75,6 +75,8 @@ class App:
         self.on_state: Callable[[str], None] = _noop
         self.on_segment: Callable[[int, str, int], None] = _noop
         self.on_error: Callable[[str], None] = _noop
+        #: Which Claude conversation is being followed, as it changes.
+        self.on_claude_session: Callable[[object], None] = _noop
 
         self.reader.on_state = self._state_changed
         self.reader.on_segment = self._segment_changed
@@ -340,8 +342,36 @@ class App:
         self._claude_thread.start()
         self.on_status("Watching " + target.name[:8] + " for new replies.")
 
+    def _follow_newest_session(self) -> None:
+        """Move to the transcript being written now, if it is a different one.
+
+        A conversation is a file. Starting a new one starts a new file, and a
+        watcher pinned to whichever file was newest when it was switched on
+        goes quiet for good the moment you open a new conversation. It does
+        not look broken while it does that: a watcher with nothing to say and
+        a watcher watching the wrong thing are the same silence.
+
+        Newest by modification time is the right question to ask, because the
+        conversation being written to is the conversation being used. Coming
+        back to an older one makes it newest again.
+
+        A different file is always joined at its end. The alternative is
+        reading a whole finished conversation aloud because you opened it.
+        """
+        if self._claude_stop.is_set():
+            return
+        newest = ct.latest_session(ct.projects_dir(self.config.claude_projects_dir))
+        if newest is None:
+            return
+        tail = self._claude_tail
+        if tail is not None and Path(tail.path) == Path(newest):
+            return
+        self._claude_tail = ct.Tail(newest, self.config.claude_read_thinking)
+        self.on_claude_session(newest)
+
     def _claude_loop(self) -> None:
         while not self._claude_stop.is_set():
+            self._follow_newest_session()
             tail = self._claude_tail
             if tail is None:
                 return
