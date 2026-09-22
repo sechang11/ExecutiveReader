@@ -354,6 +354,69 @@ def test_the_app_keeps_one_capture_window_not_two():
             tray.tray.hide()
 
 
+def test_the_read_button_names_which_of_the_two_things_it_will_do():
+    """A button called "Read the screen now" that ignores the rectangle you
+    drew looks like the rectangle being ignored, not like a different
+    question being asked."""
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.ui.miniplayer import MiniPlayer
+
+    player = MiniPlayer()
+    try:
+        assert player.btn_screen.text() == "Read the screen now"
+        player.set_area((3060, 375, 800, 150))
+        assert player.btn_screen.text() == "Read the area now", player.btn_screen.text()
+        # The size is on the button so the area can be sanity-checked without
+        # opening anything.
+        assert "800" in player.btn_screen.toolTip()
+        player.set_area(None)
+        assert player.btn_screen.text() == "Read the screen now"
+    finally:
+        player.close()
+
+
+def test_reading_now_reads_the_area_when_one_was_chosen():
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.app import App
+    from executive_reader.ui.tray import TrayApp
+
+    with own_data_dir():
+        app = App()
+        tray = TrayApp(app, qt)
+        try:
+            screen = tray.library.screen
+            called = []
+            screen.read_area_now = lambda: called.append("area")
+            app.read_screen = lambda scrolled=False: called.append("screen")
+
+            # No area yet: the whole display, as the button says.
+            assert not screen.has_area()
+            tray._read_screen_or_area()
+            assert called == ["screen"], called
+
+            # With an area, the same button reads the area instead.
+            screen._area_chosen((3060, 375, 800, 150))
+            screen.stop_watching(quiet=True)
+            assert screen.has_area()
+            assert tray.player.btn_screen.text() == "Read the area now"
+            tray._read_screen_or_area()
+            assert called == ["screen", "area"], called
+
+            # Forgetting the area puts the button back.
+            screen.clear_area()
+            assert tray.player.btn_screen.text() == "Read the screen now"
+            tray._read_screen_or_area()
+            assert called == ["screen", "area", "screen"], called
+        finally:
+            tray.hotkeys.stop()
+            app.shutdown()
+            tray.tray.hide()
+
+
 # --- the command line ----------------------------------------------------
 
 def test_command_line_accepts_the_documented_flags():

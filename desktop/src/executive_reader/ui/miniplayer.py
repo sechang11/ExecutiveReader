@@ -127,10 +127,8 @@ class MiniPlayer(QWidget):
 
         self.btn_screen = QPushButton("Read the screen now")
         self.btn_screen.setCursor(Qt.PointingHandCursor)
-        self.btn_screen.setToolTip(
-            "Read whatever is on screen right now, once, by recognising the "
-            "picture. No area needed.")
         self.btn_screen.clicked.connect(self.read_screen.emit)
+        self.set_area(None)
         buttons.addWidget(self.btn_screen)
         layout.addLayout(buttons)
 
@@ -218,6 +216,27 @@ class MiniPlayer(QWidget):
 
     def _title_clicked(self, _event) -> None:
         self.open_item.emit()
+
+    def set_area(self, rect) -> None:
+        """Say which of the two things this button will read.
+
+        Drawing a rectangle and then pressing a button called "Read the
+        screen now" should not read past the rectangle. It did, and there was
+        nothing on the button to say so, so the answer that came back looked
+        like the rectangle being ignored rather than a different question
+        being asked. Now the button reads the area when there is one, and
+        renames itself so that is visible before it is pressed.
+        """
+        if rect:
+            self.btn_screen.setText("Read the area now")
+            self.btn_screen.setToolTip(
+                "Read the rectangle you chose, once, right now. It is %d by "
+                "%d pixels at %d, %d." % (rect[2], rect[3], rect[0], rect[1]))
+        else:
+            self.btn_screen.setText("Read the screen now")
+            self.btn_screen.setToolTip(
+                "Read the display you are looking at, once, by recognising "
+                "the picture. Choose an area first to read only part of it.")
 
     def set_item_title(self, title: str) -> None:
         """Name the thing being read, instead of showing it word by word."""

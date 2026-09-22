@@ -1436,6 +1436,40 @@ def test_a_corner_that_lands_between_monitors_still_maps():
     assert mapped[2:] == (250, 100), mapped
 
 
+def test_reading_the_screen_reads_the_display_being_looked_at():
+    """Not whichever display the capture library lists first.
+
+    On one monitor those are the same thing. On this three-monitor desk the
+    first listed is not even the primary one, so reading the screen read a
+    display nobody was looking at.
+    """
+    from executive_reader.capture import ocr
+
+    # Entry zero is the whole virtual desktop, which is never the answer.
+    monitors = [{"left": -2560, "top": 0, "width": 10240, "height": 1440},
+                {"left": 2560, "top": 0, "width": 5120, "height": 1440,
+                 "is_primary": False},
+                {"left": -2560, "top": 0, "width": 2560, "height": 1440,
+                 "is_primary": False},
+                {"left": 0, "top": 0, "width": 2560, "height": 1440,
+                 "is_primary": True}]
+
+    # The mouse decides.
+    assert ocr.choose_monitor(monitors, (3000, 700))["left"] == 2560
+    assert ocr.choose_monitor(monitors, (-1000, 700))["left"] == -2560
+    assert ocr.choose_monitor(monitors, (100, 700))["left"] == 0
+    # No mouse to ask: the primary, not the first listed.
+    assert ocr.choose_monitor(monitors, None)["left"] == 0
+    # A position off every display falls back the same way.
+    assert ocr.choose_monitor(monitors, (99999, 99999))["left"] == 0
+    # Nothing claims to be primary: the first real display, never the union.
+    plain = [monitors[0], monitors[1], monitors[2]]
+    assert ocr.choose_monitor(plain, None)["width"] == 5120
+    # A single display works with no list of extras to choose from.
+    one = [{"left": 0, "top": 0, "width": 1920, "height": 1080}]
+    assert ocr.choose_monitor(one, None)["width"] == 1920
+
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

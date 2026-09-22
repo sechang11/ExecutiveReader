@@ -45,6 +45,9 @@ class ScreenTab(QWidget):
     status = Signal(str)
     captures_changed = Signal(list)
     now_reading = Signal(str)
+    #: The chosen rectangle, or None. The player asks so that its own read
+    #: button can mean the area when there is one.
+    area_changed = Signal(object)
 
     def __init__(self, app) -> None:
         super().__init__()
@@ -209,6 +212,7 @@ class ScreenTab(QWidget):
         self.lbl_area.setText(
             "Watching %d by %d pixels at %d, %d.%s"
             % (rect[2], rect[3], rect[0], rect[1], note))
+        self.area_changed.emit(rect)
         self.start_watching()
 
     def start_watching(self) -> None:
@@ -268,6 +272,7 @@ class ScreenTab(QWidget):
         self.btn_now.setEnabled(False)
         self.btn_clear.setEnabled(False)
         self.lbl_area.setText("No area chosen.")
+        self.area_changed.emit(None)
         self.status.emit("Area forgotten.")
 
     # --- captures --------------------------------------------------------
@@ -342,6 +347,10 @@ class ScreenTab(QWidget):
         self._live_capture = capture
         self.now_reading.emit(title_for(capture))
         self.app.read_text(capture.text, "Screen area")
+
+    def has_area(self) -> bool:
+        """Whether a rectangle has been chosen."""
+        return self._rect is not None
 
     def live_capture(self):
         """The capture being read, or None. Live: a scroll extends it."""

@@ -21,8 +21,48 @@ class OCRUnavailable(RuntimeError):
     pass
 
 
+def choose_monitor(monitors: list, point: tuple | None = None) -> dict:
+    """Which display to read when no area was chosen.
+
+    The one the mouse is on, because that is the one being looked at. It is
+    also the right answer when the button being pressed is on the floating
+    player, since the player sits on the screen in use.
+
+    This used to take the first display the capture library listed, which on
+    a single screen is the only screen and on three is whichever Windows
+    happened to enumerate first. On this desk that was not even the primary
+    one, so reading the screen read a monitor nobody was looking at.
+    """
+    real = [m for m in monitors[1:]] or monitors
+    if point is not None:
+        x, y = point
+        for m in real:
+            if (m["left"] <= x < m["left"] + m["width"]
+                    and m["top"] <= y < m["top"] + m["height"]):
+                return m
+    for m in real:
+        if m.get("is_primary"):
+            return m
+    return real[0]
+
+
+def _cursor() -> tuple | None:
+    """Where the mouse is, in the pixels a screenshot is made of."""
+    try:
+        from PySide6.QtGui import QCursor
+
+        from . import screens
+    except ImportError:
+        return None
+    try:
+        at = QCursor.pos()
+        return screens.physical((at.x(), at.y(), 1, 1))[:2]
+    except Exception:
+        return None
+
+
 def _grab(region: tuple[int, int, int, int] | None = None):
-    """Screenshot the whole virtual desktop, or a left/top/width/height box."""
+    """Screenshot a left/top/width/height box, or the display in use."""
     try:
         import mss
         from PIL import Image
@@ -34,7 +74,7 @@ def _grab(region: tuple[int, int, int, int] | None = None):
             left, top, width, height = region
             box = {"left": left, "top": top, "width": width, "height": height}
         else:
-            box = sct.monitors[1]
+            box = choose_monitor(sct.monitors, _cursor())
         shot = sct.grab(box)
     return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 

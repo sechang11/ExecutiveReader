@@ -76,10 +76,11 @@ class TrayApp(QObject):
         self._reading_window = ClipboardWindow()
         self._reading_window.read_from.connect(self._read_passage)
         self.player.open_item.connect(self._open_item)
-        self.player.read_screen.connect(lambda: self.app.read_screen(False))
+        self.player.read_screen.connect(self._read_screen_or_area)
         screen = getattr(self.library, "screen", None)
         if screen is not None:
             screen.captures_changed.connect(self.player.set_recent)
+            screen.area_changed.connect(self.player.set_area)
             screen.now_reading.connect(self.player.set_item_title)
             # One window, however it is reached: from the title on the
             # player, from a row in the list, or from the Screen tab.
@@ -106,6 +107,14 @@ class TrayApp(QObject):
             return
         if screen is not None:
             screen.open_current()
+
+    def _read_screen_or_area(self) -> None:
+        """The area when one is chosen, the whole display when not."""
+        screen = getattr(self.library, "screen", None)
+        if screen is not None and screen.has_area():
+            screen.read_area_now()
+            return
+        self.app.read_screen(False)
 
     def _choose_area(self) -> None:
         screen = getattr(self.library, "screen", None)
