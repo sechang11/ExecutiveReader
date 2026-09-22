@@ -183,6 +183,24 @@ class ScreenTab(QWidget):
         self.chk_highlight.stateChanged.connect(self._highlight_toggled)
         outer.addWidget(self.chk_highlight)
 
+        self.chk_outline = QCheckBox("Show the outline of the area")
+        self.chk_outline.setChecked(True)
+        self.chk_outline.setToolTip(
+            "Draw the rectangle on screen so you can see exactly what is "
+            "being read. It stays put between sentences.")
+        self.chk_outline.stateChanged.connect(self._outline_toggled)
+        outer.addWidget(self.chk_outline)
+
+        self.chk_found = QCheckBox(
+            "Outline every word recognition finds (for troubleshooting)")
+        self.chk_found.setToolTip(
+            "Draws a box around each word the recogniser reports. If those "
+            "boxes sit on the words, the area and the coordinates are right "
+            "and any highlight problem is in the matching. If they sit "
+            "somewhere else, the area is wrong.")
+        self.chk_found.stateChanged.connect(self._found_toggled)
+        outer.addWidget(self.chk_found)
+
         self.lbl_area = QLabel("No area chosen.")
         self.lbl_area.setStyleSheet("color:#888;")
         outer.addWidget(self.lbl_area)
@@ -198,11 +216,10 @@ class ScreenTab(QWidget):
 
     def _peek_area(self, _event) -> None:
         if self._rect:
-            self._highlight.show_words([], self._rect)
+            self._highlight.set_frame(self._rect)
 
     def _unpeek_area(self, _event) -> None:
-        if not self._word_queue:
-            self._highlight.clear()
+        self._show_outline()
 
     def _area_chosen(self, rect: tuple) -> None:
         self._rect = rect
@@ -216,6 +233,7 @@ class ScreenTab(QWidget):
             "Watching %d by %d pixels at %d, %d.%s"
             % (rect[2], rect[3], rect[0], rect[1], note))
         self.area_changed.emit(rect)
+        self._show_outline()
         self.start_watching()
 
     def start_watching(self) -> None:
@@ -276,6 +294,7 @@ class ScreenTab(QWidget):
         self.btn_clear.setEnabled(False)
         self.lbl_area.setText("No area chosen.")
         self.area_changed.emit(None)
+        self._highlight.clear_all()
         self.status.emit("Area forgotten.")
 
     # --- captures --------------------------------------------------------
@@ -330,6 +349,20 @@ class ScreenTab(QWidget):
             return
         self._speak(capture)
 
+    def _show_outline(self) -> None:
+        """Put the outline up, or take it down, to match the switch."""
+        self._highlight.set_frame(
+            self._rect if (self._rect and self.chk_outline.isChecked()) else None)
+
+    def _outline_toggled(self) -> None:
+        self._show_outline()
+
+    def _found_toggled(self) -> None:
+        if self.chk_found.isChecked() and self._latest is not None:
+            self._highlight.show_found(self._latest.words)
+        else:
+            self._highlight.show_found([])
+
     def _forget_highlight(self, latest) -> None:
         """Take the marker off the screen until it can be placed again.
 
@@ -342,6 +375,7 @@ class ScreenTab(QWidget):
         self._word_timer.stop()
         self._word_queue = []
         self._highlight.clear()
+        self._found_toggled()
 
     def replay(self, index: int) -> None:
         """Read one of the recent captures, chosen from the player."""

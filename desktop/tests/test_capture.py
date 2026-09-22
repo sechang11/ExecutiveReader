@@ -1539,6 +1539,61 @@ def test_a_watcher_says_so_when_it_cannot_read_the_area():
         watcher.stop()
 
 
+def test_the_marker_survives_the_words_normalisation_rewrote():
+    """The reason the highlight died half way through a sentence.
+
+    Normalisation does not only change words, it adds and removes them:
+    "125%" is spoken as "125 percent" and a URL as "link to example.com".
+    Requiring the screen and the sentence to agree word for word meant the
+    marker lit the first half and stopped at the first expansion, which is
+    most sentences in technical text.
+    """
+    from executive_reader.capture.region import Capture, Word, words_for
+
+    def screenful(lines):
+        words, y = [], 10
+        for line in lines:
+            x = 10
+            for token in line.split():
+                words.append(Word(token, x, y, len(token) * 9, 14))
+                x += len(token) * 9 + 6
+            y += 20
+        return Capture(text=chr(10).join(lines), words=words)
+
+    cap = screenful(["Your middle monitor runs at 125%, and the app",
+                     "never knew. See https://example.com/docs for more."])
+
+    # One word on screen becomes two in the mouth: 125% -> 125 percent.
+    marked = words_for(cap, "Your middle monitor runs at 125 percent, "
+                            "and the app never knew.")
+    assert [w.text for w in marked][-2:] == ["never", "knew."], [w.text for w in marked]
+    assert len(marked) == 11, [w.text for w in marked]
+
+    # One word becomes three: the URL.
+    marked = words_for(cap, "See link to example.com for more.")
+    assert "https://example.com/docs" in [w.text for w in marked]
+    assert [w.text for w in marked][-1] == "more.", [w.text for w in marked]
+
+    # A sentence that is not on this screen still marks nothing, or the
+    # marker would wander over unrelated words after a scroll.
+    assert words_for(cap, "Something else entirely, from another window.") == []
+    assert words_for(cap, "") == []
+
+
+def test_the_marker_picks_the_right_run_when_a_word_repeats():
+    """"The" appears everywhere, so the first match is not the right start."""
+    from executive_reader.capture.region import Capture, Word, words_for
+
+    tokens = "the cat sat down then the dog ran away quickly".split()
+    words = [Word(t, 10 + i * 60, 10, 50, 14) for i, t in enumerate(tokens)]
+    cap = Capture(text=" ".join(tokens), words=words)
+
+    marked = words_for(cap, "the dog ran away quickly")
+    assert [w.text for w in marked] == ["the", "dog", "ran", "away", "quickly"], \
+        [w.text for w in marked]
+    assert marked[0].left == words[5].left, "matched the first 'the', not the right one"
+
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

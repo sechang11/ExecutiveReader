@@ -494,6 +494,112 @@ def test_the_marker_comes_off_the_screen_while_the_area_changes():
             app.shutdown()
 
 
+def test_the_area_outline_outlives_the_words_it_is_drawn_around():
+    """The outline answers "where is it reading", the marker answers "which
+    word". They are different questions, so one must not clear the other.
+
+    The outline used to be an argument to show_words, so it vanished the
+    moment a sentence ended and there was nothing left to mark.
+    """
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.capture.region import Word
+    from executive_reader.ui.overlay import Highlight
+
+    overlay = Highlight()
+    try:
+        overlay.set_frame((3060, 375, 800, 150))
+        assert overlay._frame is not None
+        overlay.show_words([Word("hello", 3100, 400, 60, 16)])
+        assert overlay._boxes and overlay._frame is not None
+        overlay.clear()
+        assert overlay._boxes == [], "the marker stayed"
+        assert overlay._frame is not None, "clearing the marker took the outline too"
+        # Forgetting the area takes everything.
+        overlay.clear_all()
+        assert overlay._frame is None and overlay._boxes == []
+    finally:
+        overlay.close()
+
+
+def test_the_outline_switch_puts_it_up_and_takes_it_down():
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.app import App
+    from executive_reader.capture.region import Capture, Word
+    from executive_reader.ui.screen_tab import ScreenTab
+
+    with own_data_dir():
+        app = App()
+        tab = ScreenTab(app)
+        try:
+            tab._rect = (3060, 375, 800, 150)
+            assert tab.chk_outline.isChecked(), "the outline should start visible"
+            tab._show_outline()
+            assert tab._highlight._frame is not None
+
+            tab.chk_outline.setChecked(False)
+            assert tab._highlight._frame is None, "switching it off left it up"
+
+            # Hovering the picker still shows it while the switch is off.
+            tab._peek_area(None)
+            assert tab._highlight._frame is not None
+            tab._unpeek_area(None)
+            assert tab._highlight._frame is None
+
+            # The troubleshooting boxes follow the newest recognition.
+            tab.chk_found.setChecked(True)
+            tab._add_capture(Capture(text="Some recognised words here.",
+                                     words=[Word("Some", 3100, 400, 40, 14),
+                                            Word("words", 3150, 400, 45, 14)]))
+            assert len(tab._highlight._found) == 2, tab._highlight._found
+            tab.chk_found.setChecked(False)
+            assert tab._highlight._found == []
+        finally:
+            tab.shutdown()
+            app.shutdown()
+
+
+def test_each_pane_converts_for_its_own_display():
+    """One window cannot span displays that are scaled differently.
+
+    A window gets a single scale factor, the one belonging to the screen Qt
+    puts it on. Stretched across a 100% and a 125% monitor it is right on one
+    and wrong on the other, and it is also too small: Qt calls the 125%
+    monitor 4096 wide where the desktop is 5120, so a thousand real pixels of
+    it could not be drawn on at all.
+
+    So each pane covers one display and converts for that display alone.
+    """
+    from executive_reader.ui.overlay import _to_pane, _touches
+
+    lg = (2560, 0, 5120, 1440)        # real pixels, the 125% monitor
+    samsung = (0, 0, 2560, 1440)      # real pixels, unscaled
+
+    # A word 500 real pixels into the scaled monitor is 400 of its own.
+    here = _to_pane((3060, 375, 800, 150), lg, 1.25)
+    assert (here.x(), here.y(), here.width(), here.height()) == (400, 300, 640, 120)
+
+    # The unscaled one is one to one, offset by where it starts.
+    there = _to_pane((100, 200, 400, 300), samsung, 1.0)
+    assert (there.x(), there.y(), there.width(), there.height()) == (100, 200, 400, 300)
+
+    # The far edge of the scaled monitor, which the old single window could
+    # not reach, converts like anywhere else.
+    edge = _to_pane((7000, 100, 600, 80), lg, 1.25)
+    assert edge.x() == 3552, edge.x()
+
+    # Nothing is drawn on a display the rectangle is not on.
+    assert _touches((3060, 375, 800, 150), lg)
+    assert not _touches((3060, 375, 800, 150), samsung)
+    assert not _touches((100, 200, 400, 300), lg)
+    # A rectangle straddling the join appears on both.
+    assert _touches((2400, 100, 400, 100), lg)
+    assert _touches((2400, 100, 400, 100), samsung)
+
+
 # --- the command line ----------------------------------------------------
 
 def test_command_line_accepts_the_documented_flags():

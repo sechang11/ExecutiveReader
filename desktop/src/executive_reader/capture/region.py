@@ -293,29 +293,96 @@ class RegionWatcher:
             self.on_capture(shot)
 
 
+#: How far the two sides may disagree before a run is abandoned. Three covers
+#: every expansion in the rules: one word becoming two or three ("link to
+#: example.com"), or several becoming one.
+_SLACK = 3
+
+#: Enough starting points to find the right run without walking the screen
+#: once per occurrence of "the".
+_MAX_STARTS = 40
+
+
+def _plain(text: str) -> str:
+    return "".join(c for c in text.lower() if c.isalnum())
+
+
+def _run_from(boxes: list, start: int, wanted: list) -> tuple:
+    """Walk boxes and wanted together from `start`. Returns (boxes, matched)."""
+    run: list = []
+    i, at, misses = start, 0, 0
+    while i < len(boxes) and at < len(wanted):
+        plain = boxes[i][1]
+        if plain == wanted[at]:
+            run.append(boxes[i][0])
+            i += 1
+            at += 1
+            misses = 0
+            continue
+        # The sentence says words the screen does not: "%" is spoken as
+        # "percent", a URL as "link to example.com". Step over them.
+        ahead = next((k for k in range(1, _SLACK + 1)
+                      if at + k < len(wanted) and wanted[at + k] == plain), None)
+        if ahead is not None:
+            run.append(boxes[i][0])
+            i += 1
+            at += ahead + 1
+            misses = 0
+            continue
+        # The screen shows words the sentence does not, for the same reasons
+        # in reverse. They are still part of what is being read, so they are
+        # still marked.
+        behind = next((k for k in range(1, _SLACK + 1)
+                       if i + k < len(boxes) and boxes[i + k][1] == wanted[at]), None)
+        if behind is not None:
+            run.extend(boxes[j][0] for j in range(i, i + behind))
+            i += behind
+            misses = 0
+            continue
+        misses += 1
+        if misses > _SLACK:
+            break
+        run.append(boxes[i][0])
+        i += 1
+        at += 1
+    return run, at
+
+
 def words_for(capture: Capture, sentence: str) -> list:
     """The word boxes that make up `sentence`, for drawing a highlight.
 
-    Matched on letters alone and in order, because the sentence has been
-    through normalisation by the time it is spoken: punctuation changed,
-    abbreviations expanded, whitespace collapsed. Comparing the words as
-    written would match almost nothing.
+    Matched on letters alone, because the sentence has been through
+    normalisation by the time it is spoken: punctuation changed, abbreviations
+    expanded, whitespace collapsed. Comparing the words as written would match
+    almost nothing.
+
+    Matched loosely, because normalisation does not only change words, it adds
+    and removes them. "125%" is spoken as "125 percent" and a URL as "link to
+    example.com", so the two sides drift apart partway through a sentence.
+    Requiring them to agree word for word meant the marker lit the first half
+    of a sentence and then stopped dead at the first expansion, which was most
+    sentences. A few words of slack on either side keeps it going.
     """
-    wanted = [w for w in ("".join(c if c.isalnum() else " " for c in sentence.lower())).split() if w]
-    if not wanted:
+    wanted = [w for w in ("".join(c if c.isalnum() else " "
+                                  for c in sentence.lower())).split() if w]
+    boxes = [(w, _plain(w.text)) for w in capture.words]
+    boxes = [(w, p) for w, p in boxes if p]
+    if not wanted or not boxes:
         return []
-    out, at = [], 0
-    for word in capture.words:
-        plain = "".join(c for c in word.text.lower() if c.isalnum())
-        if not plain:
-            continue
-        if at < len(wanted) and plain == wanted[at]:
-            out.append(word)
-            at += 1
-            if at >= len(wanted):
-                break
-        elif out and plain != wanted[min(at, len(wanted) - 1)]:
-            # A run that started but did not continue was a coincidence.
-            if at < len(wanted) // 2:
-                out, at = [], 0
-    return out if at >= max(1, len(wanted) // 2) else []
+
+    # Where the sentence might begin. Its first word usually, but if
+    # normalisation replaced that one, the next few will do.
+    starts: list[int] = []
+    for lead in range(min(_SLACK, len(wanted))):
+        starts = [i for i, (_w, p) in enumerate(boxes) if p == wanted[lead]]
+        if starts:
+            break
+    if not starts:
+        return []
+
+    best_run, best = [], 0
+    for start in starts[:_MAX_STARTS]:
+        run, matched = _run_from(boxes, start, wanted)
+        if matched > best:
+            best_run, best = run, matched
+    return best_run if best >= max(1, len(wanted) // 2) else []
