@@ -1343,6 +1343,99 @@ def test_cleaning_keeps_the_prose_and_drops_the_rest():
     assert "first real sentence" in out
     assert "second one" in out
 
+
+# --- screen scaling ------------------------------------------------------
+#
+# The desktop this was found on: three monitors side by side, the middle one
+# at 125%. Qt calls that monitor 4096x1152; a screenshot of it is 5120x1440.
+# Every area chosen on it was grabbed from the wrong place, so the app read
+# whatever happened to be up and to the left of the chosen text.
+_LAYOUT = ([((-2560, 0, 2560, 1440), 1.0),
+            ((0, 0, 2560, 1440), 1.0),
+            ((2560, 0, 4096, 1152), 1.25)],
+           # Deliberately out of screen order, which is how the capture
+           # library really returns them.
+           [(2560, 0, 5120, 1440), (-2560, 0, 2560, 1440), (0, 0, 2560, 1440)])
+
+
+def test_an_area_on_a_scaled_monitor_is_captured_where_it_was_drawn():
+    from executive_reader.capture import screens
+
+    paired = screens.pair(*_LAYOUT)
+    assert paired is not None, "the two descriptions of the desktop did not pair"
+
+    # Middle of the 125% monitor: the origin shifts and every length grows.
+    assert screens.to_physical((3000, 400, 800, 300), paired) == (3110, 500, 1000, 375)
+    # The unscaled monitors either side must be left exactly alone.
+    assert screens.to_physical((100, 200, 400, 300), paired) == (100, 200, 400, 300)
+    assert screens.to_physical((-2000, 50, 300, 90), paired) == (-2000, 50, 300, 90)
+
+
+def test_word_boxes_come_back_to_where_the_words_are():
+    """The highlight paints in Qt's pixels but is told about them in real
+    ones, so it needs the conversion in the other direction."""
+    from executive_reader.capture import screens
+
+    paired = screens.pair(*_LAYOUT)
+    assert screens.to_logical((3110, 500, 1000, 375), paired) == (3000, 400, 800, 300)
+    # Whatever is chosen must survive being converted and converted back,
+    # otherwise the outline drifts away from the area every time it is shown.
+    for box in ((3000, 400, 800, 300), (2560, 0, 100, 40), (0, 0, 2560, 1440)):
+        there = screens.to_physical(box, paired)
+        assert screens.to_logical(there, paired) == box, box
+
+
+def test_a_desktop_with_no_scaling_is_left_alone():
+    """The case that always worked has to keep working untouched."""
+    from executive_reader.capture import screens
+
+    paired = screens.pair([((0, 0, 1920, 1080), 1.0)], [(0, 0, 1920, 1080)])
+    assert paired is not None
+    for box in ((0, 0, 1920, 1080), (37, 91, 400, 250)):
+        assert screens.to_physical(box, paired) == box
+        assert screens.to_logical(box, paired) == box
+
+
+def test_a_desktop_that_cannot_be_paired_is_passed_through_untouched():
+    """Better to do what the app did before than to convert by guesswork.
+
+    Pairing is by position and size because the two libraries do not agree on
+    what a monitor is called. When that check fails the arrangement is not
+    understood, and a wrong conversion is worse than none.
+    """
+    from executive_reader.capture import screens
+
+    # Sizes that do not agree with the scale they claim.
+    assert screens.pair([((0, 0, 1920, 1080), 1.0)], [(0, 0, 2560, 1440)]) is None
+    # One list longer than the other.
+    assert screens.pair([((0, 0, 1920, 1080), 1.0)],
+                        [(0, 0, 1920, 1080), (1920, 0, 1920, 1080)]) is None
+    assert screens.pair([], [(0, 0, 1920, 1080)]) is None
+    # A negative scale is nonsense and must not reach a division.
+    assert screens.pair([((0, 0, 1920, 1080), -2.0)], [(0, 0, 1920, 1080)]) is None
+    # A screen that reports no scale is taken as unscaled, so it pairs only
+    # when its size really is one to one. Refusing it outright would switch
+    # the conversion off for every other monitor as well.
+    assert screens.pair([((0, 0, 1920, 1080), 0.0)], [(0, 0, 1920, 1080)]) is not None
+    assert screens.pair([((0, 0, 1920, 1080), None)], [(0, 0, 2560, 1440)]) is None
+    # No layout means no conversion, not a crash and not a zero rectangle.
+    assert screens.to_physical((10, 20, 30, 40), None) == (10, 20, 30, 40)
+    assert screens.to_logical((10, 20, 30, 40), None) == (10, 20, 30, 40)
+
+
+def test_a_corner_that_lands_between_monitors_still_maps():
+    """Monitors of different heights leave gaps in the desktop, and a drag
+    can end in one. Falling back to the nearest screen keeps the rectangle
+    roughly right instead of dropping it on the wrong monitor entirely."""
+    from executive_reader.capture import screens
+
+    paired = screens.pair(*_LAYOUT)
+    # Below the short 125% monitor, level with the tall ones beside it.
+    mapped = screens.to_physical((3000, 1300, 200, 80), paired)
+    assert mapped[0] == 3110, mapped
+    assert mapped[2:] == (250, 100), mapped
+
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

@@ -14,6 +14,8 @@ from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
+from ..capture import screens
+
 
 def _virtual_screen() -> QRect:
     """The whole desktop, including second monitors."""
@@ -26,7 +28,7 @@ def _virtual_screen() -> QRect:
 class RegionPicker(QWidget):
     """Dim the screen and let one rectangle be dragged out of it."""
 
-    chosen = Signal(tuple)      # (left, top, width, height) in screen pixels
+    chosen = Signal(tuple)      # (left, top, width, height) in real pixels
     cancelled = Signal()
 
     def __init__(self) -> None:
@@ -75,12 +77,18 @@ class RegionPicker(QWidget):
         offset = _virtual_screen().topLeft()
         self.close()
         # Too small to be a deliberate selection; treat it as a cancel rather
-        # than starting a watcher on twelve pixels.
+        # than starting a watcher on twelve pixels. Judged in the space the
+        # drag happened in, because that is the size the hand made.
         if box.width() < 20 or box.height() < 20:
             self.cancelled.emit()
             return
-        self.chosen.emit((box.left() + offset.x(), box.top() + offset.y(),
-                          box.width(), box.height()))
+        # Handed on in real pixels. Everything downstream of here is capture:
+        # the grab, recognition and the word boxes it returns all measure the
+        # screen as a screenshot does, and on a scaled display that is not
+        # what Qt just measured.
+        self.chosen.emit(screens.physical(
+            (box.left() + offset.x(), box.top() + offset.y(),
+             box.width(), box.height())))
 
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key_Escape:
@@ -102,11 +110,21 @@ class Highlight(QWidget):
         self._frame: tuple | None = None
 
     def show_words(self, words, frame: tuple | None = None) -> None:
-        """Mark these word boxes. An empty list clears the overlay."""
+        """Mark these word boxes. An empty list clears the overlay.
+
+        Word boxes arrive in real pixels, because recognition found them on a
+        screenshot. Painting happens in Qt's pixels. On a scaled display those
+        differ, and drawing one as if it were the other put the marker some
+        way from the word it was meant to be under.
+        """
         offset = _virtual_screen().topLeft()
-        self._boxes = [QRect(w.left - offset.x(), w.top - offset.y(),
-                             w.width, w.height) for w in words]
-        self._frame = frame
+        self._boxes = []
+        for word in words:
+            left, top, width, height = screens.logical(
+                (word.left, word.top, word.width, word.height))
+            self._boxes.append(QRect(left - offset.x(), top - offset.y(),
+                                     width, height))
+        self._frame = screens.logical(frame) if frame else None
         if self._boxes or self._frame:
             self.show()
             self.raise_()

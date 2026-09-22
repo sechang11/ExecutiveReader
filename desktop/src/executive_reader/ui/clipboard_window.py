@@ -29,6 +29,7 @@ class ClipboardWindow(QWidget):
         self.setWindowTitle("Captured text")
         self.resize(660, 480)
         self._capture = None
+        self._name = ""
 
         layout = QVBoxLayout(self)
 
@@ -76,7 +77,8 @@ class ClipboardWindow(QWidget):
         and a body of text someone wants to look at while it is read.
         """
         self._capture = doc
-        self.heading.setText(document_title(doc, getattr(doc, "title", "")))
+        self._name = document_title(doc, getattr(doc, "title", ""))
+        self.heading.setText(self._name)
         self.body.setPlainText(getattr(doc, "text", "") or "")
         self.show()
         self.raise_()
@@ -85,11 +87,41 @@ class ClipboardWindow(QWidget):
     def show_capture(self, capture) -> None:
         self._capture = capture
         when = time.strftime("%H:%M:%S", time.localtime(getattr(capture, "when", 0)))
-        self.heading.setText(title_for(capture) + "     " + when)
+        self._name = title_for(capture)
+        self.heading.setText(self._name + "     " + when)
         self.body.setPlainText(getattr(capture, "text", "") or "")
         self.show()
         self.raise_()
         self.activateWindow()
+
+    def refresh(self, capture) -> None:
+        """Take on more text for the capture already on show.
+
+        Scrolling the watched area extends the capture rather than starting a
+        new one, so a window left open on it would otherwise sit there showing
+        a version that stopped growing the moment it was opened.
+
+        The view follows the new text only when it was already at the bottom.
+        Someone who has scrolled up is reading something, and yanking them
+        back down every two seconds would make the window useless for the one
+        thing it is for.
+        """
+        if capture is not self._capture or not self.isVisible():
+            return
+        bar = self.body.verticalScrollBar()
+        following = bar.value() >= bar.maximum() - 4
+        where = bar.value()
+        self.body.setPlainText(getattr(capture, "text", "") or "")
+        bar.setValue(bar.maximum() if following else where)
+
+    def name(self) -> str:
+        """What is on show, so a passage read from here keeps its name.
+
+        Without it, everything read out of this window arrives back on the
+        player called "Selected passage", which undoes the point of naming
+        the thing in the first place.
+        """
+        return self._name
 
     # --- actions ---------------------------------------------------------
     def _read_all(self) -> None:

@@ -72,24 +72,38 @@ class TrayApp(QObject):
         # is the window that is actually on screen; the Screen tab owns the
         # machinery and hands it the previews.
         self.player.choose_area.connect(self._choose_area)
-        self.player.replay.connect(self._replay_recent)
+        self.player.open_row.connect(self._open_recent)
         self._reading_window = ClipboardWindow()
-        self._reading_window.read_from.connect(
-            lambda text: self.app.read_text(text, 'Selected passage'))
+        self._reading_window.read_from.connect(self._read_passage)
         self.player.open_item.connect(self._open_item)
         self.player.read_screen.connect(lambda: self.app.read_screen(False))
         screen = getattr(self.library, "screen", None)
         if screen is not None:
             screen.captures_changed.connect(self.player.set_recent)
             screen.now_reading.connect(self.player.set_item_title)
+            # One window, however it is reached: from the title on the
+            # player, from a row in the list, or from the Screen tab.
+            screen.use_window(self._reading_window)
+
+    def _read_passage(self, text: str) -> None:
+        """Read something chosen in the capture window, under its own name."""
+        self.app.read_text(text, self._reading_window.name() or "Selected passage")
 
     def _open_item(self) -> None:
         """Open whatever is being read, whichever route it came from."""
+        screen = getattr(self.library, "screen", None)
         doc = getattr(self.app, "_doc", None)
-        if doc is not None and (doc.text or "").strip():
+        text = (getattr(doc, "text", "") or "").strip()
+        # When the two hold the same words, show the capture rather than the
+        # document made from it: scrolling keeps adding to the capture, and
+        # the document is the snapshot taken when reading started.
+        live = screen.live_capture() if screen is not None else None
+        if live is not None and (live.text or "").strip() == text:
+            screen.open_current()
+            return
+        if text:
             self._reading_window.show_document(doc)
             return
-        screen = getattr(self.library, "screen", None)
         if screen is not None:
             screen.open_current()
 
@@ -98,10 +112,11 @@ class TrayApp(QObject):
         if screen is not None:
             screen.choose_area()
 
-    def _replay_recent(self, index: int) -> None:
+    def _open_recent(self, index: int) -> None:
+        """Show one of the recent captures in full."""
         screen = getattr(self.library, "screen", None)
         if screen is not None:
-            screen.replay(index)
+            screen.open_row(index)
 
     def _speed_changed(self, speed: float) -> None:
         self.app.set_speed(speed)

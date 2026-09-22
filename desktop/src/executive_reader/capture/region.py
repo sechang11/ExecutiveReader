@@ -170,15 +170,23 @@ def continuation(previous: str, current: str) -> str | None:
     previous capture appears at the start of this one, the rest is new and
     belongs on the end of what is already there. Returns None when the two
     share nothing, which is a genuinely different thing to read.
+
+    Compared on letters alone, for the same reason the change check is:
+    recognition is not repeatable at the edges. The identical line of pixels
+    read twice comes back as "Il" and "II", or with a comma that appears and
+    disappears. Compared as written, an overlap like that goes unnoticed and
+    the scroll becomes a new row repeating what was just read.
     """
-    old_lines = [line for line in (previous or "").splitlines() if line.strip()]
-    new_lines = [line for line in (current or "").splitlines() if line.strip()]
+    old_lines = [line for line in (previous or "").splitlines() if _key(line)]
+    new_lines = [line for line in (current or "").splitlines() if _key(line)]
     if not old_lines or not new_lines:
         return None
+    old_keys = [_key(line) for line in old_lines]
+    new_keys = [_key(line) for line in new_lines]
     limit = min(len(old_lines), len(new_lines))
     # Longest overlap first: a short one is more likely to be a coincidence.
     for size in range(limit, 0, -1):
-        if old_lines[-size:] == new_lines[:size]:
+        if old_keys[-size:] == new_keys[:size]:
             rest = new_lines[size:]
             return chr(10).join(rest) if rest else ""
     return None

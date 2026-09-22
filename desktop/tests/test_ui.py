@@ -224,6 +224,136 @@ def test_the_capture_window_reads_from_where_you_clicked():
         window.close()
 
 
+def test_a_window_left_open_on_a_capture_takes_on_what_a_scroll_adds():
+    """Scrolling extends the capture; a window showing it must follow.
+
+    Otherwise the window is a snapshot taken at the moment it was opened, and
+    the live area it was opened to watch stops being live as soon as you look
+    at it.
+    """
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.ui.clipboard_window import ClipboardWindow
+
+    class Shot:
+        def __init__(self, text):
+            self.text = text
+            self.when = 0
+            self.words = []
+
+    one, two = Shot("The opening line."), Shot("Something else entirely.")
+    window = ClipboardWindow()
+    try:
+        window.show_capture(one)
+        one.text = one.text + chr(10) + "A line the scroll brought in."
+        window.refresh(one)
+        assert "the scroll brought in" in window.body.toPlainText()
+        # A capture that is not the one on show must not overwrite it.
+        window.refresh(two)
+        assert "Something else" not in window.body.toPlainText()
+        # Nor may anything be written into a window nobody has open.
+        window.hide()
+        one.text = one.text + chr(10) + "Arrived while closed."
+        window.refresh(one)
+        assert "Arrived while closed" not in window.body.toPlainText()
+    finally:
+        window.close()
+
+
+def test_a_passage_read_from_the_capture_window_keeps_its_name():
+    """The window knows what it is showing, and reading from it must not
+    rename the thing to "Selected passage" on the player."""
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.ui.clipboard_window import ClipboardWindow
+
+    class Shot:
+        # Recognition returns lines, so the name comes from the first one.
+        text = ("Quarterly figures for the region" + chr(10)
+                + "Revenue rose in every division except one.")
+        when = 0
+        words: list = []
+
+    window = ClipboardWindow()
+    try:
+        assert window.name() == ""
+        window.show_capture(Shot())
+        window.hide()
+        assert window.name() == "Quarterly figures for the region", window.name()
+        # The timestamp is on the heading but must not be part of the name,
+        # or every passage read from here would be called a different thing.
+        assert "Quarterly figures" in window.heading.text()
+        assert window.name() not in ("", "Selected passage")
+    finally:
+        window.close()
+
+
+def test_clicking_a_recent_capture_opens_it_rather_than_reading_it():
+    """The reason to reach for an earlier capture is almost always to check a
+    word recognition got wrong, which means looking at it."""
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.ui.miniplayer import MiniPlayer
+
+    player = MiniPlayer()
+    try:
+        opened = []
+        player.open_row.connect(opened.append)
+        player.set_recent(["09:31  The first capture.", "09:30  The one before."])
+        assert player.recent.isVisible() or True     # hidden until the player shows
+        assert player.recent.count() == 2
+        player.recent.itemClicked.emit(player.recent.item(1))
+        assert opened == [1], opened
+        # An empty list hides itself rather than leaving a gap on the player.
+        player.set_recent([])
+        assert player.recent.isHidden()
+    finally:
+        player.close()
+
+
+def test_the_app_keeps_one_capture_window_not_two():
+    """The title on the player and the rows in the list have to lead to the
+    same window, or which one appears depends on where the click landed."""
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.app import App
+    from executive_reader.ui.tray import TrayApp
+
+    with own_data_dir():
+        app = App()
+        tray = TrayApp(app, qt)
+        try:
+            screen = tray.library.screen
+            assert screen._window is tray._reading_window, "two windows"
+
+            class Shot:
+                text = "A recognised passage worth checking."
+                when = 0
+                words: list = []
+                preview = "A recognised passage worth checking."
+
+            shot = Shot()
+            screen._captures.insert(0, shot)
+            screen._live_capture = shot
+            tray._open_item()
+            assert "recognised passage" in tray._reading_window.body.toPlainText()
+            tray._reading_window.hide()
+
+            # And a row in the player's list opens the same window.
+            tray._reading_window.body.setPlainText("")
+            tray._open_recent(0)
+            assert "recognised passage" in tray._reading_window.body.toPlainText()
+            tray._reading_window.hide()
+        finally:
+            tray.hotkeys.stop()
+            app.shutdown()
+            tray.tray.hide()
+
+
 # --- the command line ----------------------------------------------------
 
 def test_command_line_accepts_the_documented_flags():

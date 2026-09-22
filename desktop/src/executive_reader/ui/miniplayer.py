@@ -52,7 +52,7 @@ class MiniPlayer(QWidget):
     open_library = Signal()
     speed_changed = Signal(float)
     choose_area = Signal()
-    replay = Signal(int)
+    open_row = Signal(int)
     open_item = Signal()
     read_screen = Signal()
 
@@ -105,8 +105,14 @@ class MiniPlayer(QWidget):
         self.recent.setObjectName("recent")
         self.recent.setMaximumHeight(96)
         self.recent.setUniformItemSizes(True)
+        self.recent.setToolTip(
+            "Everything read from the chosen area. Click one to open it and "
+            "see the whole thing.")
+        # Opening rather than reading, because the reason to reach for an
+        # earlier one is almost always to check a word recognition got wrong,
+        # and the window that opens has a button to read it.
         self.recent.itemClicked.connect(
-            lambda item: self.replay.emit(self.recent.row(item)))
+            lambda item: self.open_row.emit(self.recent.row(item)))
         self.recent.hide()
         layout.addWidget(self.recent)
 
@@ -216,6 +222,9 @@ class MiniPlayer(QWidget):
     def set_item_title(self, title: str) -> None:
         """Name the thing being read, instead of showing it word by word."""
         self.sentence.setText(title)
+        self.sentence.setToolTip(
+            "Click to open " + (title or "what is being read")
+            + " and see the whole text.")
 
     #: Ten is what fits without the player becoming a window of its own.
     RECENT_ROWS = 10

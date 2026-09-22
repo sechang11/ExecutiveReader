@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QGridLayout,
                                QWidget)
 
 from ..capture import region as region_mod
+from ..capture import screens
 from .clipboard_window import ClipboardWindow, title_for
 from .overlay import Highlight, RegionPicker
 
@@ -66,11 +67,15 @@ class ScreenTab(QWidget):
         layout.addWidget(self._controls())
         layout.addWidget(self._area_box())
         layout.addWidget(QLabel("Everything read from the area, newest first. "
-                                "Click a row to hear it again."))
+                                "Click a row to see all of it. Double-click "
+                                "to hear it again."))
         self.rows = QListWidget()
         self.rows.setSelectionMode(QAbstractItemView.SingleSelection)
+        # Seeing and hearing are different wants, so they are different
+        # gestures. Recognition misreads words, and the only way to find out
+        # which is to look at the text rather than listen to it again.
+        self.rows.itemClicked.connect(self._open_row)
         self.rows.itemActivated.connect(self._read_row)
-        self.rows.itemClicked.connect(self._read_row)
         layout.addWidget(self.rows, 1)
 
     # --- construction ----------------------------------------------------
@@ -195,8 +200,15 @@ class ScreenTab(QWidget):
 
     def _area_chosen(self, rect: tuple) -> None:
         self._rect = rect
+        # Reported in real pixels, which is what gets captured. On a scaled
+        # display that is not the number of pixels the rectangle looked like,
+        # so the scale is named rather than left to look like a mistake.
+        scale = screens.scale_at(rect)
+        note = ("" if abs(scale - 1.0) < 0.01
+                else "  That display is scaled to %d%%." % round(scale * 100))
         self.lbl_area.setText(
-            "Watching %d by %d pixels at %d, %d." % (rect[2], rect[3], rect[0], rect[1]))
+            "Watching %d by %d pixels at %d, %d.%s"
+            % (rect[2], rect[3], rect[0], rect[1], note))
         self.start_watching()
 
     def start_watching(self) -> None:
@@ -259,6 +271,11 @@ class ScreenTab(QWidget):
         self.status.emit("Area forgotten.")
 
     # --- captures --------------------------------------------------------
+    def _label(self, capture) -> str:
+        """How a capture is named in a list: the time, and what it says."""
+        return (time.strftime("%H:%M:%S", time.localtime(capture.when))
+                + "   " + title_for(capture))
+
     def _captured(self, capture) -> None:
         """A recognition arrived. Called from the watcher thread."""
         # Qt widgets may only be touched from the GUI thread, so hop across.
@@ -275,9 +292,9 @@ class ScreenTab(QWidget):
             head.text = (head.text + chr(10) + capture.text).strip()
             head.words = list(head.words) + list(capture.words)
             if self.rows.count():
-                self.rows.item(0).setText(
-                    time.strftime("%H:%M:%S", time.localtime(head.when))
-                    + "   " + head.preview)
+                self.rows.item(0).setText(self._label(head))
+            # A window open on this one has just gained text; show it.
+            self._window.refresh(head)
             self._announce()
             if self._live_capture is head:
                 # Already reading this one: queue the rest rather than
@@ -286,8 +303,8 @@ class ScreenTab(QWidget):
             return
         self._captures.insert(0, capture)
         del self._captures[MAX_ROWS:]
-        item = QListWidgetItem(time.strftime("%H:%M:%S", time.localtime(capture.when))
-                               + "   " + capture.preview)
+        item = QListWidgetItem(self._label(capture))
+        item.setToolTip(capture.preview)
         self.rows.insertItem(0, item)
         while self.rows.count() > MAX_ROWS:
             self.rows.takeItem(self.rows.count() - 1)
@@ -305,7 +322,7 @@ class ScreenTab(QWidget):
 
     def _announce(self) -> None:
         self.captures_changed.emit(
-            [time.strftime("%H:%M", time.localtime(c.when)) + "  " + c.preview
+            [time.strftime("%H:%M", time.localtime(c.when)) + "  " + title_for(c)
              for c in self._captures])
 
     def _read_row(self, item) -> None:
@@ -313,10 +330,34 @@ class ScreenTab(QWidget):
         if 0 <= index < len(self._captures):
             self._speak(self._captures[index])
 
+    def _open_row(self, item) -> None:
+        self.open_row(self.rows.row(item))
+
+    def open_row(self, index: int) -> None:
+        """Show one of the captures in full, chosen from either list."""
+        if 0 <= index < len(self._captures):
+            self._window.show_capture(self._captures[index])
+
     def _speak(self, capture) -> None:
         self._live_capture = capture
         self.now_reading.emit(title_for(capture))
         self.app.read_text(capture.text, "Screen area")
+
+    def live_capture(self):
+        """The capture being read, or None. Live: a scroll extends it."""
+        return self._live_capture
+
+    def use_window(self, window) -> None:
+        """Share the app's one capture window instead of keeping a second.
+
+        Two windows open on two different captures is a worse answer than one
+        window open on the one that was asked for, and which of them appeared
+        would depend on where the click landed.
+        """
+        old, self._window = self._window, window
+        if old is not None and old is not window:
+            old.close()
+            old.deleteLater()
 
     def open_current(self) -> None:
         """Show the whole of whatever is being read."""
