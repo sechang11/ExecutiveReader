@@ -1312,6 +1312,37 @@ def test_speeding_up_audio_does_not_move_its_pitch():
     same = time_stretch(tone, rate, 1.0)
     assert len(same) == len(tone)
 
+
+def test_recognition_noise_is_not_read_aloud():
+    """Recognition returns something for every mark on screen.
+
+    Icons, bullets, checkboxes and borders come back as runs of lone letters
+    and punctuation, and spoken they are a stream of single letters. Shape is
+    what separates them from language, not a word list, so it holds whatever
+    icon set an application happens to use.
+    """
+    from executive_reader.capture import region as region_mod
+
+    for junk in ("O O O O O O O O O O", "| | |", "....", "a b c d e",
+                 "> > >", "   "):
+        assert region_mod.is_gibberish(junk), junk
+    for real in ("This is a real sentence with words.", "I am a real line.",
+                 "Page 12 of 40", "OK", "Yes"):
+        assert not region_mod.is_gibberish(real), real
+
+
+def test_cleaning_keeps_the_prose_and_drops_the_rest():
+    from executive_reader.capture import region as region_mod
+    nl = chr(10)
+    raw = nl.join(["O O O O O O",
+                   "The first real sentence of the passage.",
+                   "| | | |",
+                   "And the second one after it."])
+    out = region_mod.clean(raw)
+    assert "O O O" not in out, out
+    assert "first real sentence" in out
+    assert "second one" in out
+
 if __name__ == "__main__":
     passed = failed = skipped = 0
     for name, fn in sorted(globals().items()):

@@ -58,6 +58,52 @@ class Capture:
         return flat[:90] + ("..." if len(flat) > 90 else "")
 
 
+#: A line with at least this many tokens is judged on its shape. Below it,
+#: "a b" is more likely to be real text than a misread.
+_SHAPE_MIN_TOKENS = 3
+
+#: Above this share of single-character tokens the line is not language. Icons,
+#: bullets, checkboxes and list markers all come back from recognition as runs
+#: of lone letters, which is where "O O O O O O" comes from.
+_SINGLE_TOKEN_SHARE = 0.6
+
+#: A line needs this share of letters and digits to be worth saying. Below it
+#: the line is box-drawing, punctuation or recognition noise.
+_ALNUM_SHARE = 0.4
+
+
+def is_gibberish(line: str) -> bool:
+    """True when a recognised line is not language.
+
+    Recognition returns something for every mark on screen, so icons, bullets,
+    borders and checkboxes arrive as lines of lone letters and punctuation.
+    Spoken, they are a stream of single letters, which is the loudest possible
+    way to be wrong.
+
+    Shape is what separates them, not a word list: real prose has multi-letter
+    words and is mostly letters, and none of that depends on the language or
+    on which icon set an application happens to use.
+    """
+    stripped = line.strip()
+    if not stripped:
+        return True
+    letters = sum(1 for ch in stripped if ch.isalnum())
+    if letters / len(stripped) < _ALNUM_SHARE:
+        return True
+    tokens = stripped.split()
+    if len(tokens) >= _SHAPE_MIN_TOKENS:
+        singles = sum(1 for token in tokens if len(token.strip(".,;:!?-")) <= 1)
+        if singles / len(tokens) > _SINGLE_TOKEN_SHARE:
+            return True
+    return False
+
+
+def clean(text: str) -> str:
+    """Drop the lines of a recognition that are not language."""
+    return chr(10).join(line for line in (text or "").splitlines()
+                        if not is_gibberish(line))
+
+
 def read_region(rect: tuple) -> Capture:
     """Recognise one rectangle. Returns text and where each word sits.
 
@@ -81,7 +127,14 @@ def read_region(rect: tuple) -> Capture:
     text = "\n".join(
         (line.get("text") if isinstance(line, dict) else "") or ""
         for line in result.get("lines") or []).strip()
-    return Capture(text=text or (result.get("text") or "").strip(), words=words)
+    body = clean(text or (result.get("text") or "").strip())
+    # Words that survive the clean, so the highlight cannot land on a line the
+    # reader never says.
+    kept = {w.strip().lower() for line in body.splitlines() for w in line.split()}
+    words = [w for w in words
+             if "".join(c for c in w.text.lower() if c.isalnum())
+             in {"".join(c for c in k if c.isalnum()) for k in kept}]
+    return Capture(text=body, words=words)
 
 
 def _recognize(image) -> dict:

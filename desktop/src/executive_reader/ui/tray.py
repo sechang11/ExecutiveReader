@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 from ..hotkeys import Hotkeys
 from ..player.engine import PLAYING
 from .icons import speaker_icon
+from .clipboard_window import ClipboardWindow, document_title
 from .library import Library
 from .miniplayer import MiniPlayer
 
@@ -72,6 +73,9 @@ class TrayApp(QObject):
         # machinery and hands it the previews.
         self.player.choose_area.connect(self._choose_area)
         self.player.replay.connect(self._replay_recent)
+        self._reading_window = ClipboardWindow()
+        self._reading_window.read_from.connect(
+            lambda text: self.app.read_text(text, 'Selected passage'))
         self.player.open_item.connect(self._open_item)
         self.player.read_screen.connect(lambda: self.app.read_screen(False))
         screen = getattr(self.library, "screen", None)
@@ -80,6 +84,11 @@ class TrayApp(QObject):
             screen.now_reading.connect(self.player.set_item_title)
 
     def _open_item(self) -> None:
+        """Open whatever is being read, whichever route it came from."""
+        doc = getattr(self.app, "_doc", None)
+        if doc is not None and (doc.text or "").strip():
+            self._reading_window.show_document(doc)
+            return
         screen = getattr(self.library, "screen", None)
         if screen is not None:
             screen.open_current()
@@ -218,6 +227,12 @@ class TrayApp(QObject):
     @Slot(str, int)
     def _on_document(self, title: str, total: int) -> None:
         self.player.set_document(title, total)
+        # Name whatever is being read, from any route, not only from a screen
+        # area. The title was wired to the screen watcher alone, so reading a
+        # page or the clipboard left the line blank and clicking it did
+        # nothing, which is most of the ways this app gets used.
+        doc = getattr(self.app, "_doc", None)
+        self.player.set_item_title(document_title(doc, title))
         self.player.set_speed(self.app.config.speed)
         if not self.player.isVisible() and self.app.config.mini_player:
             self._show_player()

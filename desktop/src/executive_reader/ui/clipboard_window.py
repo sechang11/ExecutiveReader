@@ -69,6 +69,19 @@ class ClipboardWindow(QWidget):
         row.addWidget(close)
         layout.addLayout(row)
 
+    def show_document(self, doc) -> None:
+        """Show whatever is being read, from any route.
+
+        A captured screen area and a web page are the same thing here: a title
+        and a body of text someone wants to look at while it is read.
+        """
+        self._capture = doc
+        self.heading.setText(document_title(doc, getattr(doc, "title", "")))
+        self.body.setPlainText(getattr(doc, "text", "") or "")
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
     def show_capture(self, capture) -> None:
         self._capture = capture
         when = time.strftime("%H:%M:%S", time.localtime(getattr(capture, "when", 0)))
@@ -100,6 +113,22 @@ class ClipboardWindow(QWidget):
 
 #: Long enough to tell two captures apart, short enough for the player.
 TITLE_CHARS = 52
+
+
+def document_title(doc, fallback: str = "") -> str:
+    """A name for anything being read.
+
+    A document usually brings its own title: a page has one, a file has its
+    name. A screen capture has nothing, so the first line does the job, which
+    is what a person would use to recognise it in a list anyway.
+    """
+    given = (getattr(doc, "title", "") or fallback or "").strip()
+    text = (getattr(doc, "text", "") or "").strip()
+    if given and given.lower() not in ("window", "screen area", "pasted text"):
+        return given if len(given) <= TITLE_CHARS else given[:TITLE_CHARS] + "..."
+    if not text:
+        return given or "Nothing playing"
+    return title_for(doc)
 
 
 def title_for(capture) -> str:
