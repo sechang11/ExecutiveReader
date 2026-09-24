@@ -98,7 +98,13 @@ for (const name of names) {
   }
   if (parsed._affects_stored_text) hashes[name] = sha(JSON.stringify(semantic(parsed)));
 
-  writeFileSync(join(dest, name), text);
+  // Written with the line endings .gitattributes asks for, whatever the source
+  // happens to have on disk. A script editing shared/*.json on Windows leaves
+  // CRLF behind, git considers the file unmodified because it normalises on
+  // commit, and the copy then differs from its original in bytes while being
+  // identical in content. That made the drift test fail for the wrong reason,
+  // telling the reader to re-run this very script.
+  writeFileSync(join(dest, name), text.split('\r\n').join('\n'));
   console.log(`synced ${name}${parsed._affects_stored_text ? ' (fingerprinted)' : ''}`);
 }
 
@@ -211,6 +217,13 @@ for (const [from, to] of SITE_FILES) {
     process.exit(1);
   }
   mkdirSync(dirname(dest_), { recursive: true });
-  copyFileSync(src_, dest_);
+  // Same reasoning as the JSON above, and the same exception: a line-ending
+  // conversion applied to a gzip or a PNG corrupts it silently, so anything
+  // binary is copied rather than rewritten.
+  if (/\.(gz|png|onnx|bin|wasm)$/.test(src_)) {
+    copyFileSync(src_, dest_);
+  } else {
+    writeFileSync(dest_, readFileSync(src_, 'utf8').split('\r\n').join('\n'));
+  }
 }
 console.log(`synced ${SITE_FILES.length} files into site/`);

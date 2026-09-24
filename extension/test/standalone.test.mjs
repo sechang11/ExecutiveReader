@@ -31,6 +31,33 @@ const sharedRoot = path.join(repoRoot, 'shared');
 const synced = readdirSync(sharedRoot)
   .filter((n) => statSync(path.join(sharedRoot, n)).isDirectory());
 
+/**
+ * Compare a copy against its canonical original.
+ *
+ * Byte-for-byte for anything binary, and line-ending-insensitive for text.
+ *
+ * The second half is not a loosened check, it is the check the copies actually
+ * need. A line ending is not drift: both halves parse these as JSON or load
+ * them as modules, and nothing downstream can tell CRLF from LF. Comparing raw
+ * bytes made this fail whenever any tool on Windows rewrote one side with
+ * platform line endings — which happened, from a script editing the shared
+ * rules — and it failed with a message telling the reader to re-run the sync,
+ * which did not help because nothing had drifted.
+ *
+ * That is the failure this project has now named twice: a check that cries
+ * wolf teaches people to ignore it, and a message that names the wrong repair
+ * teaches them to apply it.
+ */
+const BINARY = /\.(gz|png|onnx|bin|wasm)$/;
+
+function sameContent(copyPath, canonicalPath) {
+  const copy = readFileSync(copyPath);
+  const canonical = readFileSync(canonicalPath);
+  if (BINARY.test(canonicalPath)) return copy.equals(canonical);
+  const lf = (buf) => buf.toString('utf8').split('\r\n').join('\n');
+  return lf(copy) === lf(canonical);
+}
+
 test('there are shared directories to check', () => {
   // Guards the guard: an empty list would make every test below vacuous.
   assert.ok(synced.length >= 2, `only ${synced.length} shared directories found`);
@@ -61,16 +88,15 @@ test('the copy the extension loads is present and complete', () => {
   assert.ok(checked >= 4, `only ${checked} files checked`);
 });
 
-test('the copy matches the canonical version byte for byte', () => {
+test('the copy matches the canonical version', () => {
   // The specific failure mode of a copy: a stale duplicate does not break, it
   // answers. Both halves would agree, both harnesses would pass, and words
   // would be pronounced by an older rule with nothing reporting it.
   let compared = 0;
   for (const dir of synced) {
     for (const name of readdirSync(path.join(sharedRoot, dir))) {
-      assert.deepEqual(
-        readFileSync(path.join(extRoot, 'vendor', dir, name)),
-        readFileSync(path.join(sharedRoot, dir, name)),
+      assert.ok(
+        sameContent(path.join(extRoot, 'vendor', dir, name), path.join(sharedRoot, dir, name)),
         `vendor/${dir}/${name} has drifted from shared/${dir}/${name}; re-run tools/sync-shared.mjs`,
       );
       compared++;
@@ -128,7 +154,7 @@ test('the site demo runs the same code and data as the extension', () => {
     const a = path.join(extRoot, canonical);
     const b = path.join(extRoot, copy);
     assert.ok(existsSync(b), `${copy} is missing; run tools/sync-shared.mjs`);
-    assert.deepEqual(readFileSync(b), readFileSync(a),
+    assert.ok(sameContent(b, a),
       `${copy} has drifted from ${canonical}; re-run tools/sync-shared.mjs`);
     compared++;
   }
