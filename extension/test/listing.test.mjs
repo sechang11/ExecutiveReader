@@ -98,3 +98,33 @@ test('the claim of no telemetry is true in the code', () => {
   assert.deepEqual(offenders, [],
     'an unexpected host in our own code would make the privacy policy untrue');
 });
+
+test('the name fits where the store and the browser will show it', () => {
+  // Both are hard limits on the upload form, which truncates rather than
+  // warning, so a rejection here is a slow round trip for a character count.
+  assert.ok(manifest.name.length <= 75, `name is ${manifest.name.length} characters`);
+  assert.ok(manifest.description.length <= 132,
+    `manifest description is ${manifest.description.length} characters`);
+});
+
+test('a short name exists for the places the full one will not fit', () => {
+  // Chrome shows `short_name` in the extensions menu and anywhere space is
+  // tight, and falls back to truncating `name` when there is none. The full
+  // name is forty-one characters and says what the product does; the short one
+  // is what someone scans a menu for.
+  assert.ok(manifest.short_name, 'no short_name, so the menu shows a truncated name');
+  assert.ok(manifest.short_name.length <= 12 || manifest.name.startsWith(manifest.short_name),
+    'a short name that is not a prefix of the name reads as a different product');
+  assert.ok(manifest.short_name.length < manifest.name.length,
+    'a short name the same length as the name is not doing anything');
+});
+
+test('the icons the manifest declares are the sizes Chrome asks for', () => {
+  // 16 for the favicon-sized slots, 48 for the extensions page, 128 for the
+  // store. A missing size is substituted by scaling the nearest, which is how
+  // a crisp mark becomes a blurry one in exactly one place.
+  const icons = manifest.icons ?? {};
+  for (const size of ['16', '48', '128']) {
+    assert.ok(icons[size], `no ${size}px icon declared`);
+  }
+});

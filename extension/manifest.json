@@ -1,6 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Executive Reader — Natural Text to Speech",
+  "short_name": "Executive Reader",
   "version": "0.1.0",
   "description": "Reads web pages aloud in natural voices that run on your own machine. Free, offline, and private.",
   "minimum_chrome_version": "116",
