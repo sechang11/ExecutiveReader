@@ -18,6 +18,10 @@ const POPUP = '/extension/src/popup/popup.html';
 const POPUP_JS = '/extension/src/popup/popup.js';
 const PANEL = '/extension/src/sidepanel/panel.html';
 const PANEL_JS = '/extension/src/sidepanel/panel.js';
+const OPTIONS = '/extension/src/options/options.html';
+const OPTIONS_JS = '/extension/src/options/options.js';
+const WELCOME = '/extension/src/welcome/welcome.html';
+const WELCOME_JS = '/extension/src/welcome/welcome.js';
 
 /** Mid-read, so both the playing and the position branches are exercised. */
 const READING = {
@@ -39,11 +43,20 @@ const VOICES = [
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
+/** Wait for a condition, for the cases that depend on a fetch rather than a click. */
+async function until(condition, message, tries = 200) {
+  for (let i = 0; i < tries; i++) {
+    if (condition()) return;
+    await tick();
+  }
+  throw new Error(message);
+}
+
 export async function surfaceTests({ test, assert, equal, deepEqual, stage }) {
   /** Mount a page, run the body against it, and always tear it down. */
-  async function surface(name, page, script, replies, fn) {
+  async function surface(name, page, script, replies, fn, stored = {}) {
     await test(name, '', async () => {
-      const h = pageChrome(replies);
+      const h = pageChrome(replies, stored);
       try {
         await mountSurface(stage, page, script, h);
         await fn(h);
@@ -225,5 +238,155 @@ export async function surfaceTests({ test, assert, equal, deepEqual, stage }) {
       const text = stage.textContent;
       assert(/4\s*(of|\/)\s*5/.test(text) || text.includes('sentence 4 of 5'),
         'the panel does not show the position the popup does');
+    });
+
+  // ---------------------------------------------------------- the settings
+
+  const optionsReplies = {
+    'get-voices': VOICES,
+    'neural-status': { model: false, voices: {} },
+    'neural-evict': { ok: true },
+    'prune-history': { removed: 3 },
+    'clear-history': { ok: true },
+    'pronunciations-changed': { ok: true },
+  };
+
+  await surface('a pronunciation the user adds is stored and shown back',
+    OPTIONS, OPTIONS_JS, optionsReplies, async (h) => {
+      // The likeliest source of a bad first review is a mispronounced name,
+      // and this is the two-second fix. It shipped once with nothing reading
+      // it at all.
+      document.getElementById('say-word').value = 'Kokoro';
+      document.getElementById('say-as').value = 'ko ko ro';
+      document.getElementById('say-add').click();
+      await tick();
+
+      deepEqual(h.stored.userPronunciations, [{ match: 'Kokoro', say: 'ko ko ro' }]);
+      assert(document.getElementById('say-list').textContent.includes('Kokoro'),
+        'the rule was stored but never shown back');
+    });
+
+  await surface('the worker is told at once, not at its next wake',
+    OPTIONS, OPTIONS_JS, optionsReplies, async (h) => {
+      // Otherwise the change takes effect whenever the worker happens to
+      // restart, which looks exactly like the setting not working.
+      document.getElementById('say-word').value = 'Kokoro';
+      document.getElementById('say-as').value = 'ko ko ro';
+      document.getElementById('say-add').click();
+      await tick();
+
+      assert(h.last('pronunciations-changed'), 'the worker was never told');
+    });
+
+  await surface('editing a word replaces its rule rather than shadowing it',
+    OPTIONS, OPTIONS_JS, optionsReplies, async (h) => {
+      // A second rule for the same word is shadowed by the first, so the edit
+      // looks as though it did not take.
+      for (const as of ['ko ko ro', 'kaw kaw raw']) {
+        document.getElementById('say-word').value = 'Kokoro';
+        document.getElementById('say-as').value = as;
+        document.getElementById('say-add').click();
+        await tick();
+      }
+
+      deepEqual(h.stored.userPronunciations, [{ match: 'Kokoro', say: 'kaw kaw raw' }]);
+    });
+
+  await surface('a rule that says nothing is refused, with a reason',
+    OPTIONS, OPTIONS_JS, optionsReplies, async (h) => {
+      document.getElementById('say-word').value = 'Kokoro';
+      document.getElementById('say-as').value = '';
+      document.getElementById('say-add').click();
+      await tick();
+
+      equal(h.stored.userPronunciations, undefined);
+      assert(document.getElementById('status').textContent.length > 0,
+        'a control that silently does nothing reads as broken');
+    });
+
+  await surface('a word mapped to itself is refused', OPTIONS, OPTIONS_JS,
+    optionsReplies, async (h) => {
+      document.getElementById('say-word').value = 'Kokoro';
+      document.getElementById('say-as').value = 'Kokoro';
+      document.getElementById('say-add').click();
+      await tick();
+
+      equal(h.stored.userPronunciations, undefined);
+    });
+
+  await surface('removing a rule removes exactly that one', OPTIONS, OPTIONS_JS,
+    optionsReplies, async (h) => {
+      const remove = [...document.querySelectorAll('#say-list button')]
+        .find((b) => /kokoro/i.test(b.getAttribute('aria-label') ?? ''));
+      assert(remove, 'the stored rule had no remove button');
+
+      remove.click();
+      await tick();
+
+      deepEqual(h.stored.userPronunciations, [{ match: 'Piper', say: 'pie per' }]);
+    },
+    {
+      userPronunciations: [
+        { match: 'Kokoro', say: 'ko ko ro' },
+        { match: 'Piper', say: 'pie per' },
+      ],
+    });
+
+  await surface('the shipped rules are listed but cannot be removed',
+    OPTIONS, OPTIONS_JS, optionsReplies, async () => {
+      // They come from the package, so a Remove button on one would be a
+      // control that cannot do what it says.
+      //
+      // Waited for rather than assumed: this list arrives from a fetch of the
+      // packaged rules, so a fixed pause would make the test depend on how
+      // fast the page is served.
+      const list = document.getElementById('say-builtin');
+      await until(() => list.querySelectorAll('li').length > 0,
+        'the shipped rules were never shown');
+
+      assert(!list.textContent.includes('Nothing here yet'), list.textContent);
+      equal(list.querySelectorAll('button').length, 0);
+    });
+
+  await surface('removing the voice download says so', OPTIONS, OPTIONS_JS,
+    optionsReplies, async (h) => {
+      // Someone who tried neural voices and went back should not be left
+      // carrying eighty-eight megabytes they cannot see or remove.
+      document.getElementById('evict').click();
+      await tick();
+
+      assert(h.last('neural-evict'), 'nothing was asked to delete the download');
+      assert(document.getElementById('status').textContent.length > 0,
+        'a deletion with no acknowledgement reads as a dead button');
+    });
+
+  await surface('download progress is reported against the real total',
+    OPTIONS, OPTIONS_JS, optionsReplies, async (h) => {
+      h.push({ type: 'neural-progress', loaded: 46000000, total: 92000000 });
+      await tick();
+
+      equal(document.getElementById('progress').value, 50);
+      const text = document.getElementById('progress-text').textContent;
+      assert(text.includes('50%'), text);
+    });
+
+  await surface('an unknown download size shows an indeterminate bar, not zero',
+    OPTIONS, OPTIONS_JS, optionsReplies, async (h) => {
+      // Content-Length is absent on some responses. A bar pinned at zero for
+      // ninety seconds is indistinguishable from a hang.
+      h.push({ type: 'neural-progress', loaded: 46000000, total: 0 });
+      await tick();
+
+      equal(document.getElementById('progress').hasAttribute('value'), false);
+    });
+
+  // ------------------------------------------------------------ first run
+
+  await surface('the welcome page can start the voice download', WELCOME, WELCOME_JS,
+    { 'neural-download': { ok: true }, 'get-voices': VOICES }, async (h) => {
+      document.getElementById('get-voices').click();
+      await tick();
+
+      assert(h.sent.length > 0, 'the first thing a new user presses did nothing');
     });
 }

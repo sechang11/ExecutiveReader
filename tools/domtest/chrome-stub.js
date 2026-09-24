@@ -21,7 +21,7 @@
  */
 
 /** @param {Record<string, any|((msg: any) => any)>} replies keyed by message type */
-export function pageChrome(replies = {}) {
+export function pageChrome(replies = {}, stored = {}) {
   const sent = [];
   const listeners = [];
   const opened = [];
@@ -29,6 +29,8 @@ export function pageChrome(replies = {}) {
   const chrome = {
     runtime: {
       getURL: (p) => `/extension/${p}`,
+      // The settings page prints the version it is showing settings for.
+      getManifest: () => ({ version: '0.1.0', name: 'Executive Reader' }),
       async sendMessage(msg) {
         sent.push(msg);
         const reply = replies[msg.type];
@@ -43,16 +45,31 @@ export function pageChrome(replies = {}) {
     sidePanel: {
       async open(arg) { opened.push(arg); },
     },
+    // A real store, not a stub that forgets. The settings page writes a
+    // preference and then reads it back on the next interaction, so a `set`
+    // that goes nowhere makes every persistence test pass by accident.
     storage: {
       local: {
-        async get() { return {}; },
-        async set() {},
+        async get(keys) {
+          if (keys == null) return { ...stored };
+          if (typeof keys === 'string') return keys in stored ? { [keys]: stored[keys] } : {};
+          if (Array.isArray(keys)) {
+            return Object.fromEntries(keys.filter((k) => k in stored).map((k) => [k, stored[k]]));
+          }
+          return Object.fromEntries(
+            Object.entries(keys).map(([k, d]) => [k, k in stored ? stored[k] : d]),
+          );
+        },
+        async set(patch) { Object.assign(stored, patch); },
+        async remove(keys) { for (const k of [].concat(keys)) delete stored[k]; },
       },
     },
   };
 
   return {
     chrome,
+    /** Whatever the page has written to local storage. */
+    stored,
     /** Every message the page has sent, oldest first. */
     sent,
     /** Anything the page asked the browser to open. */
