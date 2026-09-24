@@ -135,7 +135,13 @@ submitting. The store requires a URL, not a file.
 ## Before submitting
 
 - [ ] Replace the placeholder icons in `extension/assets/` with real artwork
-- [ ] Screenshots: 1280×800 or 640×400, at least one, at most five
+- [ ] Screenshots: 1280×800 or 640×400, at least one, at most five.
+      These have to be taken by hand. Release builds of Chrome refuse
+      `--load-extension` — the log line is "--load-extension is not allowed in
+      Google Chrome, ignoring" — so the extension cannot be driven from a
+      script for this. Load it unpacked, open an article, and capture the page
+      mid-read with the highlight lit, the popup, and the side panel showing
+      history.
 - [ ] Host the privacy policy and put its URL in the listing
 - [ ] Verify the trademark and domain for "Executive Reader" are clear
 - [ ] Run `node tools/sync-shared.mjs`, then confirm `node --test extension/test/` is green

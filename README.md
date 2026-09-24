@@ -118,16 +118,17 @@ unpacked**, and pick the `extension` folder. Open any article and press Alt+P.
 node --test extension/test/
 ```
 
-Sentence segmentation and offset mapping are the pieces worth pinning
-down hardest, but the suite also covers the anchor ladder, the phonemizer, PDF
-layout, the inference worker's fallback path, the voice model cache, the system
-voice engine, licence compliance across every vendored byte, and whether the
-shipped copies of shared data have drifted from their originals. GitHub Actions
-runs it, and re-runs both generators to check neither has lapsed.
+Sentence segmentation and offset mapping are the pieces worth pinning down
+hardest, but the suite also covers the service worker's whole read loop, the
+anchor ladder, the phonemizer, PDF layout, the inference worker's fallback
+path, the voice model cache, the system voice engine, licence compliance across
+every vendored byte, and whether the shipped copies of shared data have drifted
+from their originals. GitHub Actions runs it, and re-runs both generators to
+check neither has lapsed.
 
-The content scripts need a real document — a TreeWalker over live elements,
-computed styles, Ranges, a mutation observer — so their tests run in a browser
-instead:
+The content scripts and the extension's own pages need a real document — a
+TreeWalker over live elements, computed styles, Ranges, a mutation observer, a
+popup with buttons to press — so their tests run in a browser instead:
 
 ```powershell
 node tools/serve-repo.mjs
@@ -140,9 +141,14 @@ the same suite headlessly, which is what CI does:
 node tools/run-domtests.mjs
 ```
 
-It drives the Chrome already on the machine and exits non-zero on failure. On
-its first run it found that a "Next" link pointing at the current page was
-followed, which re-reads the same page forever.
+It drives the Chrome already on the machine and exits non-zero on failure.
+
+Both suites are worth running, and both have earned it. The browser suite found
+on its first run that a "Next" link pointing at the current page was followed,
+which re-reads the same page forever. The first test ever written against the
+service worker found that "continue onto the next page" did nothing: the
+setting was cleared by the same reset that clears the document, so pressing
+play turned it off again.
 
 ### Working now
 
@@ -196,6 +202,14 @@ decision to make.
 Designed icon artwork — the current mark is drawn by a script — screenshots
 from the real surfaces, and a hosted URL for the privacy policy.
 Submission copy is written in [`docs/store-listing.md`](docs/store-listing.md).
+
+The screenshots cannot be automated: `--load-extension` is refused by release
+builds of Chrome, which answer with *"--load-extension is not allowed in Google
+Chrome, ignoring"* and carry on without it. So the store images have to come
+from a hand-driven browser with the unpacked extension loaded, and the
+browser-based suite covers those surfaces instead — it mounts the real pages
+and presses their controls, which is the part a screenshot could not have
+checked anyway.
 
 ### What is vendored, and why
 
