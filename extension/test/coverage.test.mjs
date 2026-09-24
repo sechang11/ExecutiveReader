@@ -95,7 +95,7 @@ const KNOWN_UNREACHED = {
   // CAVEATS section 19 is about.
   'src/engines/kokoro/worker.js': 'covered by test/worker.test.mjs; imported through a computed URL this scan cannot follow',
 
-  'src/offscreen/offscreen.js': 'message wiring between the worker and the audio graph',
+  'src/offscreen/offscreen.js': 'message wiring between the worker and the audio graph; driven against a real AudioContext in tools/domtest/',
   'src/options/options.js': 'settings page DOM; the page is mounted and used in tools/domtest/',
   'src/pdf/viewer.js': 'viewer page DOM',
   'src/popup/popup.js': 'popup DOM; the page is mounted and clicked in tools/domtest/',

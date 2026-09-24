@@ -23,6 +23,7 @@ import * as highlight from '../../extension/src/content/highlight.js';
 import { startScrollFollow } from '../../extension/src/content/scroll.js';
 import { surfaceTests } from './surfaces.js';
 import { contentTests } from './content.js';
+import { offscreenTests } from './offscreen.js';
 
 const results = document.getElementById('results');
 const stage = document.getElementById('stage');
@@ -810,6 +811,11 @@ await surfaceTests({ test, assert, equal, deepEqual, stage });
 // covered above one at a time, which says nothing about whether they are put
 // together correctly.
 await contentTests({ test, assert, equal, deepEqual, stage });
+
+// And the audio path, against a real AudioContext rather than the fake that
+// player.test.mjs uses. A duration computed from a sample rate the device does
+// not use is arithmetic that passes a fake and silence that does not.
+await offscreenTests({ test, assert, equal, deepEqual, stage });
 
 const summary = document.getElementById('summary');
 summary.textContent = failed
