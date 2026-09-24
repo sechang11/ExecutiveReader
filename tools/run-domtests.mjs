@@ -18,6 +18,16 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const PORT = 8125;
+
+/**
+ * How much virtual time the page is given.
+ *
+ * Virtual time runs timers as fast as the browser can, so this is not a
+ * wall-clock limit — it is a bound on how much *simulated* waiting the suite
+ * may do. Exceeding it dumps the page mid-run, which reads as a broken
+ * harness rather than a slow one, so the failure message below says so.
+ */
+const BUDGET_MS = 120000;
 const URL_UNDER_TEST = `http://localhost:${PORT}/tools/domtest/`;
 
 /** Where Chrome lives, in the order worth trying. */
@@ -59,7 +69,7 @@ const args = [
   '--headless=new',
   '--disable-gpu',
   '--no-sandbox',
-  '--virtual-time-budget=30000',
+  `--virtual-time-budget=${BUDGET_MS}`,
   '--dump-dom',
   URL_UNDER_TEST,
 ];
@@ -77,7 +87,16 @@ stop();
 const summary = /<div id="summary"[^>]*>([^<]*)<\/div>/.exec(dom)?.[1]?.trim();
 
 if (!summary || summary === 'Running…') {
-  console.error('The suite did not finish. Chrome dumped:');
+  // Name the likely repair. This failure has exactly two causes, and the
+  // difference between them is how many tests reached the page: a suite that
+  // ran out of virtual time has results and no summary, while one that threw
+  // on the way in has neither.
+  const ran = [...dom.matchAll(/<li class="(pass|fail)">/g)].length;
+  console.error(ran
+    ? `The suite ran ${ran} tests and then stopped. That is usually the `
+      + `virtual time budget (${BUDGET_MS} ms); raise it in this file.`
+    : 'The suite never started. Chrome dumped the page below, which usually '
+      + 'means a module failed to load — check the paths and the server.');
   console.error(dom.slice(0, 2000));
   process.exit(1);
 }
