@@ -407,7 +407,14 @@ class Library(QMainWindow):
         self.chk_resume.setChecked(cfg.auto_resume)
         layout.addWidget(self.chk_resume)
 
-        self.chk_code = QCheckBox("Skip code blocks")
+        self.chk_code = QCheckBox("Do not even mention code blocks")
+        self.chk_code.setToolTip(
+            "Left unticked, a code block is announced with its language and "
+            "length -- \"PowerShell code block, two lines\" -- and the code "
+            "itself is not read out. Tick this to leave it out in silence.\n\n"
+            "It used to be the other way round, so the default removed code "
+            "without a word and this was the only way to be told it was "
+            "there.")
         self.chk_code.setChecked(cfg.skip_code_blocks)
         layout.addWidget(self.chk_code)
 

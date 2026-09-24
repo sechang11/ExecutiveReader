@@ -63,7 +63,10 @@ class Addon:
                 "neural voices were trained on eSpeak's phonemes, so unusual "
                 "words and names are pronounced better with it than with the "
                 "imitation of it used otherwise. It is not bundled because "
-                "its licence would cover this whole application.")
+                "its licence would cover this whole application."
+                + chr(10) * 2
+                + "It is one command: winget install eSpeak-NG.eSpeak-NG. "
+                "This app finds it by itself afterwards.")
 
 
 def detect() -> Addon:
