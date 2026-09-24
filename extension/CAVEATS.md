@@ -671,3 +671,39 @@ identical, but informal all-lowercase writing — chat logs, forum posts, notes 
 is real content for a reader, and there the general rule swallows every boundary
 in the piece and reads it as one utterance with no pauses in it. The ellipsis has
 no such counterexample.
+
+## 32. "Hard to test" was a description of the obstacle
+
+`background/index.js` is the only thing that decides what gets read next, and
+it had no tests. The coverage list carried it as *"orchestration over
+chrome.tabs, storage.session and messaging"* — which is true, and is a
+description of the obstacle rather than a reason to accept it. Every other entry
+on that list names something with no Node equivalent. This one named three APIs
+that are objects with methods.
+
+The obstacle turned out to be a hundred lines of stand-in, and the first test
+written against it found a shipped feature that did nothing:
+
+`BLANK` is spread over the state on every stop, to clear the current document.
+`autoAdvance` was a field in `BLANK`. So turning on "continue onto the next
+page" and then pressing play cleared it before the read began, and the setting
+could only work if it was toggled *during* a read. It had a checkbox on two
+surfaces, a line in the spec, and an entry in the privacy policy.
+
+A second defect came out of the same file, from a mutation that **hung the suite
+instead of failing it**. Removing the auto-advance condition made the read
+follow next pages forever, which is only possible because nothing bounded it:
+two pages that each name the other as "next" — an ordinary two-part article —
+were read alternately without end. The content script refuses a link pointing at
+the page it is on, and that says nothing about the page before it.
+
+Three lessons, in order of how much they cost to learn:
+
+- **A reason that names an API is not a reason.** "Needs a live DOM" is a fact
+  about the world. "Needs `chrome.storage`" is a fact about an afternoon.
+- **A hang is a test result.** It took a timeout around the mutation runner to
+  notice, and the test now forces that case to fail in seconds with a sentence
+  saying what cycled, because a hang reads as a broken machine rather than a
+  broken guard.
+- **Settings are not state.** Anything the user chose must survive the reset
+  that clears what the program is doing, and must outlive session storage.
