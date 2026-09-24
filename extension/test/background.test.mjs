@@ -589,3 +589,111 @@ test('a genuine chain of pages is still followed', async () => {
     'https://example.com/page/4',
   ]);
 });
+
+/**
+ * Only one read loop may be running.
+ *
+ * `skip` aborts the sentence in flight and then starts the loop again. That is
+ * correct while a sentence is being spoken, and there is a window where it is
+ * not: between one sentence finishing and the next controller being created,
+ * `currentAbort` refers to a sentence that has already ended, so aborting it
+ * stops nothing and the original loop carries on — alongside the new one.
+ *
+ * Two loops paint and speak the same document at once. The window is a few
+ * milliseconds per sentence, which is small and is exactly the size of the gap
+ * a person hits by pressing skip while listening.
+ */
+test('a skip between sentences does not start a second reader', async () => {
+  await wake();
+
+  // Skip once, at the moment a sentence ends and before the next begins.
+  let skipped = false;
+  const speak = h.chrome.tts.speak.bind(h.chrome.tts);
+  h.chrome.tts.speak = (text, opts) => {
+    const wrapped = {
+      ...opts,
+      onEvent: (e) => {
+        opts.onEvent(e);
+        if (e.type === 'end' && !skipped) {
+          skipped = true;
+          ask(h, { type: 'skip', delta: 1 }).catch(() => {});
+        }
+      },
+    };
+    speak(text, wrapped);
+  };
+
+  await ask(h, { type: 'toggle-play' });
+  await settle();
+
+  const painted = h.calls.tabMessages
+    .filter((m) => m.type === 'paint-sentence').map((m) => m.index);
+  const duplicates = painted.filter((v, i) => painted.indexOf(v) !== i);
+
+  assert.deepEqual(duplicates, [],
+    `two readers painted the same sentences: ${painted.join(',')}`);
+});
+
+/**
+ * Three presses of skip move three sentences.
+ *
+ * Every message handler is its own async function, so three presses in quick
+ * succession interleave: each reads the index before any of them has written
+ * one, all three compute the same next index, and the reader moves one
+ * sentence for three presses. The same shape applies to the speed steps.
+ *
+ * This is a lost update, not a race in the read loop, and it needed its own
+ * fix: the loop generation above settles which reader survives and says
+ * nothing about what the index should be when they all started from the same
+ * one.
+ */
+test('three skips in quick succession move three sentences', async () => {
+  await wake({
+    session: {
+      state: {
+        status: 'paused', tabId: 1, index: 0, texts: PAGE.texts, exact: PAGE.exact,
+        voiceKey: null, speed: 1, volume: 1, url: PAGE.url, title: PAGE.title,
+        autoAdvance: false,
+      },
+    },
+  });
+
+  await Promise.all([
+    ask(h, { type: 'skip', delta: 1 }),
+    ask(h, { type: 'skip', delta: 1 }),
+    ask(h, { type: 'skip', delta: 1 }),
+  ]);
+
+  assert.equal((await state()).index, 3, 'presses were lost to each other');
+});
+
+test('speed steps in quick succession all count', async () => {
+  await wake();
+  const before = (await state()).speed;
+
+  await Promise.all([
+    ask(h, { type: 'set-speed', speed: before }),
+    new Promise((r) => { h.events.onCommand.dispatch('speed-up'); setImmediate(r); }),
+    new Promise((r) => { h.events.onCommand.dispatch('speed-up'); setImmediate(r); }),
+  ]);
+  await settle();
+
+  const after = (await state()).speed;
+  assert.ok(after > before * 1.2, `speed went ${before} -> ${after}; a step was lost`);
+});
+
+test('a read that finished does not resume when a later one is stopped', async () => {
+  // A retired loop must stay retired. Bumping the generation on every start is
+  // only half of it; the check has to happen at the top of each iteration, not
+  // only where a sentence is awaited.
+  await wake();
+  await ask(h, { type: 'toggle-play' });
+  await settle();
+  const afterFirst = h.calls.tabMessages.filter((m) => m.type === 'paint-sentence').length;
+
+  await ask(h, { type: 'stop' });
+  await settle();
+
+  const afterStop = h.calls.tabMessages.filter((m) => m.type === 'paint-sentence').length;
+  assert.equal(afterStop, afterFirst, 'something kept painting after the read was stopped');
+});

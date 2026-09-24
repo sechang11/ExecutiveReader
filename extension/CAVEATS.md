@@ -707,3 +707,35 @@ Three lessons, in order of how much they cost to learn:
   broken guard.
 - **Settings are not state.** Anything the user chose must survive the reset
   that clears what the program is doing, and must outlive session storage.
+
+## 33. Aborting the work is not stopping the worker
+
+Skipping a sentence aborts the one in flight and starts the read loop again.
+That is correct while a sentence is being spoken, and there is a window where it
+is not: between one sentence finishing and the next `AbortController` being
+created, `currentAbort` refers to a sentence that has already ended. Aborting it
+stops nothing, the original loop carries on, and the new one starts beside it.
+Two loops then paint and speak the same document at once.
+
+The window is a few milliseconds per sentence. That is not a theoretical size —
+it is the size of the gap a person hits by pressing skip while listening.
+
+The fix is a generation counter rather than a better abort: every start claims a
+number, and a loop retires at its next iteration when the number is no longer
+its own. That holds whatever the abort did or did not catch, because it does not
+depend on catching anything.
+
+**Writing the test for this found a second defect underneath it.** Three presses
+of skip in quick succession moved *one* sentence. Every message handler is its
+own async function, so the three interleave: each reads the index before any has
+written one, and all three compute the same next index. The loop generation
+settles which reader survives and says nothing about what the index should be
+when they all started from the same one.
+
+Both are the same shape one level apart, and neither is reachable by using the
+extension deliberately — you have to press the control at the wrong moment,
+which is to say, at an ordinary moment.
+
+**"Stop the old work" and "make sure the old worker stops" are different
+claims.** The first is about the thing being awaited; the second is about the
+loop doing the awaiting, and only the second survives the gaps between them.

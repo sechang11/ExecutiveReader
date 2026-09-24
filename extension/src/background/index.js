@@ -82,6 +82,47 @@ const SETTING_DEFAULTS = { autoAdvance: false };
 let currentAbort = null;
 
 /**
+ * Which read loop is the current one.
+ *
+ * Aborting the in-flight sentence is not enough to stop the loop, because
+ * there is a window where no sentence is in flight: between one finishing and
+ * the next controller being created, `currentAbort` refers to a sentence that
+ * has already ended, so aborting it stops nothing. A skip landing there left
+ * the original loop running and started a second one, and both painted and
+ * spoke the same document.
+ *
+ * The window is a few milliseconds per sentence — which is the size of the gap
+ * a person hits by pressing skip while listening, rather than a theoretical
+ * one. Every caller that restarts the loop already bumps this by calling
+ * runLoop(), so the older loop retires at its next iteration whatever the
+ * abort did or did not catch.
+ */
+let loopGeneration = 0;
+
+/**
+ * Serialise a read-modify-write of the state.
+ *
+ * Every message handler is its own async function, so three presses of skip in
+ * quick succession interleave: each reads the index before any of them has
+ * written one, all three compute the same next index, and the reader moves one
+ * sentence for three presses. The speed steps lose the same way.
+ *
+ * Only the small operations run in here. Starting a read awaits a tab
+ * injection and a page build, and holding a lock across that would make the
+ * next press wait on the network.
+ *
+ * @template T @param {() => Promise<T>} fn @returns {Promise<T>}
+ */
+let mutations = Promise.resolve();
+function atomically(fn) {
+  const next = mutations.then(fn, fn);
+  // Never reject the chain itself, or one failed handler wedges every later
+  // one behind it.
+  mutations = next.then(() => {}, () => {});
+  return next;
+}
+
+/**
  * Settings live in `chrome.storage.local` rather than `session`, because
  * session storage is cleared when the browser restarts and a preference must
  * not be. See SETTING_DEFAULTS above for why they are not part of BLANK.
@@ -346,7 +387,9 @@ async function startReading(tabId, opts = {}) {
  * speed change lands on the very next sentence.
  */
 async function runLoop() {
+  const mine = ++loopGeneration;
   for (;;) {
+    if (mine !== loopGeneration) return; // a newer loop took over
     const state = await getState();
     if (state.status !== 'speaking') return;
     if (state.index >= state.texts.length) {
@@ -388,7 +431,7 @@ async function runLoop() {
       } catch (e) {
         console.warn('[executive-reader] neural sentence failed, skipping', e);
       }
-      if (currentAbort.signal.aborted) return;
+      if (currentAbort.signal.aborted || mine !== loopGeneration) return;
       const afterNeural = await getState();
       if (afterNeural.status !== 'speaking') return;
       await setState({ index: afterNeural.index + 1 });
@@ -441,7 +484,8 @@ async function runLoop() {
       console.warn('[executive-reader] sentence failed, skipping', e);
     }
 
-    if (currentAbort.signal.aborted) return; // a skip or stop already moved us
+    // A skip or stop already moved us, or a newer loop has taken over.
+    if (currentAbort.signal.aborted || mine !== loopGeneration) return;
     const after = await getState();
     if (after.status !== 'speaking') return;
     await setState({ index: after.index + 1 });
@@ -486,27 +530,31 @@ async function togglePlay() {
 }
 
 /** @param {number} delta */
-async function skip(delta) {
-  const state = await getState();
-  if (!state.texts.length) return;
-  const index = Math.min(Math.max(state.index + delta, 0), state.texts.length - 1);
-  await setState({ index });
-  currentAbort?.abort();
-  chrome.tts.stop();
-  if (state.status === 'speaking') runLoop().catch(() => {});
-  else notifyTab(state.tabId, { type: 'paint-sentence', index });
+function skip(delta) {
+  return atomically(async () => {
+    const state = await getState();
+    if (!state.texts.length) return;
+    const index = Math.min(Math.max(state.index + delta, 0), state.texts.length - 1);
+    await setState({ index });
+    currentAbort?.abort();
+    chrome.tts.stop();
+    if (state.status === 'speaking') runLoop().catch(() => {});
+    else notifyTab(state.tabId, { type: 'paint-sentence', index });
+  });
 }
 
 /** @param {number} factor */
-async function changeSpeed(factor) {
-  const state = await getState();
-  const speed = Math.round(Math.min(Math.max(state.speed * factor, 0.5), 4) * 20) / 20;
-  await setState({ speed });
-  if (state.status === 'speaking') {
-    currentAbort?.abort();
-    chrome.tts.stop();
-    runLoop().catch(() => {});
-  }
+function changeSpeed(factor) {
+  return atomically(async () => {
+    const state = await getState();
+    const speed = Math.round(Math.min(Math.max(state.speed * factor, 0.5), 4) * 20) / 20;
+    await setState({ speed });
+    if (state.status === 'speaking') {
+      currentAbort?.abort();
+      chrome.tts.stop();
+      runLoop().catch(() => {});
+    }
+  });
 }
 
 function notifyTab(tabId, msg) {
