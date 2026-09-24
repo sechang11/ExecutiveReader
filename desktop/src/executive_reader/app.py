@@ -425,12 +425,30 @@ class App:
         self._claude_tail = ct.Tail(target, self.config.claude_read_thinking)
         self.on_claude_session(target)
 
+    def _claude_title(self, tail) -> str:
+        """The conversation a reply came from, as the sidebar names it."""
+        try:
+            found = ct.describe_session(Path(tail.path))
+            return "Claude: " + (found.title or found.project or "reply")
+        except Exception:
+            return "Claude reply"
+
     def claude_target(self) -> Path | None:
-        """The conversation to follow: the pinned one, or the live one."""
+        """The conversation to follow: the pinned one, or the live one.
+
+        A pinned conversation that is no longer there falls back to the live
+        one rather than to nothing. Returning nothing left the reader sitting
+        on a file that had gone, which is silent, and silent is also what it
+        looks like when there is simply nothing to say.
+        """
         pinned = (self.config.claude_session or "").strip()
         if pinned:
             chosen = Path(pinned)
-            return chosen if chosen.is_file() else None
+            if chosen.is_file():
+                return chosen
+            self.config.claude_session = ""
+            self.on_status("That conversation is gone; following whichever "
+                           "one you type in instead.")
         return ct.active_session(ct.projects_dir(self.config.claude_projects_dir))
 
     def set_claude_session(self, path) -> None:
@@ -466,8 +484,13 @@ class App:
                       for turn in turns]
             bodies = [body.strip() for body in bodies if body.strip()]
             if bodies:
+                # Named after the conversation it came from. The reader moves
+                # between conversations as you type in them, so "Claude reply"
+                # on the player left no way to tell which answer was being
+                # read -- and the title is also the door to the full text.
                 self.read(Document(text=(chr(10) + chr(10)).join(bodies),
-                                   title="Claude reply", source="claude"),
+                                   title=self._claude_title(tail),
+                                   source="claude"),
                           resume=False)
             self._claude_stop.wait(1.0)
 

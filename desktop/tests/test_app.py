@@ -761,7 +761,13 @@ def test_a_claude_reply_arrives_as_sentences_a_person_would_say():
             assert _wait_for(lambda: application.reader.segments), \
                 "the reply was never picked up"
             spoken = list(application.reader.segments)
+            title = application._doc.title if application._doc else ""
             application.set_claude_watch(False)
+
+    # The reply is named after the conversation it came from, because the
+    # reader moves between conversations as you type in them and "Claude
+    # reply" on the player says nothing about which answer this is.
+    assert title.startswith("Claude: "), title
 
     said = " ".join(spoken)
     # Markdown is not read as punctuation.

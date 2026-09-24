@@ -20,11 +20,13 @@ the extension spec and deliberately not built yet.
 Screen OCR only sees what is visible, so a long PDF means scrolling and
 stitching, and every page costs a recognition pass that can get words wrong.
 Reading the actual text is better in every way, so OCR is the last resort
-rather than the default. The app tries five routes in order and stops at the
-first that yields text:
+rather than the default. The app tries six routes in order and stops at the
+first that yields text. Rung 0 is not part of the ladder the other rungs form:
+it is chosen because you are reading Claude, not fallen back to.
 
 | Rung | Source | Reads text hidden off screen |
 |---|---|---|
+| 0 | Claude Code transcript | yes, and knows reply from thinking |
 | 1 | Highlighted selection | yes |
 | 2 | The file the window has open | yes, all pages at once |
 | 3 | Window text via accessibility | yes |
@@ -134,8 +136,50 @@ Thinking text is present in some sessions and redacted in others. Across the 72
 transcripts on this machine, 11,179 thinking blocks had text and 19,974 were
 empty. When a session redacts it, only the visible replies can be read.
 
-Turn on "Read new Claude Code replies aloud" in Settings and new replies are
-spoken as they land.
+This is the first tab and it is on by default, because it is the job the app
+exists for and the only route that needs nothing set up. The screen recogniser
+sat on the first tab for a long time with all the buttons on it, which led
+anyone following the interface to the worst way of doing the main job.
+
+### Which conversation
+
+The hard part is not reading a conversation, it is knowing which one. A
+machine running several Claude sessions has several transcripts being appended
+to at once, and most of the appending is done by agents nobody is watching, so
+"the newest file" belongs to a robot.
+
+What decides it is a person typing. A typed message is a user entry whose
+content is a string; a tool result is also a user entry, but its content is a
+list of `tool_result` blocks, and there are roughly twenty of those for every
+typed line. A session nobody has ever typed in is never followed by accident.
+
+By default the reader moves with you as you switch conversations. Click one in
+the list to stay on it. The list names them the way the sidebar does, from the
+`agent-name` and `custom-title` entries in the transcript.
+
+Deciding this means looking backwards through a transcript for the last typed
+message. Measured on this machine, transcripts run from one to eighty megabytes
+and that message sits between a tenth of a megabyte and six megabytes from the
+end, so the search window is two megabytes: enough for nearly all of them, and
+a conversation buried under more tool output than that is not the one you just
+typed in. What has been read is remembered, so a refresh costs only the bytes
+added since.
+
+### What a reply sounds like
+
+An answer is markdown, and markdown read literally is punctuation. A table is
+read as its rows with the header said once, rather than as a row of vertical
+bars. A fenced code block is announced with its language and length --
+"PowerShell code block, two lines" -- following the `code_blocks` mode in
+`shared/normalization.json`, rather than being read out or dropped in silence.
+A heading is given a terminator so the voice stops rising at the end of it.
+
+The opening segment is capped shorter than the rest. Nothing is heard until it
+has been synthesized, and synthesis costs about a second and a half plus a
+little per character, so the first sentence alone decides how long the silence
+before a reply is. On a real reply that took it from 6.3 seconds to 3.4. The
+voice is also loaded at startup rather than on the first reply, which was four
+seconds more.
 
 ## Shortcuts
 

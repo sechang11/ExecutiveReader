@@ -47,7 +47,15 @@ _HEADING_LINE = re.compile(r"^([^\n]{1,70}[A-Za-z0-9\"')\]])\n(?=[A-Z])", re.M)
 # or, as it used to be when the setting was off, complete silence.
 _FENCE = re.compile(r"```([^\n`]*)\n?(.*?)```", re.S)
 _INLINE_CODE = re.compile(r"`([^`\n]+)`")
-_MD_HEAD = re.compile(r"^\s{0,3}#{1,6}\s+", re.M)
+# The whole heading, not just its hashes.
+#
+# Stripping the marker and leaving the words was enough for the segmenter,
+# which treats the blank line after a heading as a boundary anyway, but not
+# for the voice: a line with no terminator is read with the pitch still
+# rising, so every heading in an answer sounded like a sentence that had been
+# interrupted. The hashes are proof it is a heading, which is more than the
+# guesswork rule below the wrap rules ever has.
+_MD_HEAD = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*[ \t]*$", re.M)
 _MD_BULLET = re.compile(r"^\s*[-*+\u2022]\s+", re.M)
 _MD_LINK = re.compile(r"\[([^\]\n]+)\]\((?:[^)\s]+)(?:\s+\"[^\"]*\")?\)")
 _MD_IMG = re.compile(r"!\[([^\]\n]*)\]\([^)]*\)")
@@ -433,6 +441,14 @@ def _announce(match, mode: str) -> str:
     return " \n\n " + what + ". \n\n "
 
 
+def _heading(match) -> str:
+    """A markdown heading, ended so the voice knows it ended."""
+    words = (match.group(1) or "").strip()
+    if not words:
+        return ""
+    return words if words[-1] in _ENDS_A_THOUGHT else words + "."
+
+
 # --- tables --------------------------------------------------------------
 
 #: The dashes under a table's header. Required before anything is treated as
@@ -520,7 +536,7 @@ def normalize(text: str, *, skip_code: bool = False, urls: str = "domain") -> st
     text = _TABLE_RULE.sub("", text)
     text = _MD_IMG.sub(lambda m: f" image, {m.group(1)} " if m.group(1) else " image ", text)
     text = _MD_LINK.sub(r"\1", text)
-    text = _MD_HEAD.sub("", text)
+    text = _MD_HEAD.sub(_heading, text)
     text = flatten_lists(text)
     text = _MD_EMPH.sub(r"\2", text)
 

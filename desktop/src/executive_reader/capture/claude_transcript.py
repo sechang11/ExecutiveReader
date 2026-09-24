@@ -339,7 +339,12 @@ def as_document(path: Path, include_thinking: bool = False,
                        if t.speakable(include_thinking))
     if not body.strip():
         return None
-    return Document(text=body, title="Claude session " + path.stem[:8],
+    # Named the way the sidebar names it. "Claude session 180e18b5" is a
+    # correct description of a file and no description at all of a
+    # conversation, and it is what the player shows while reading it.
+    named = describe_session(path)
+    return Document(text=body,
+                    title="Claude: " + (named.title or path.stem[:8]),
                     uri="claude://" + path.stem, source="claude",
                     meta={"path": str(path), "turns": len(turns),
                           "thinking": include_thinking})

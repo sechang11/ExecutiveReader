@@ -138,6 +138,23 @@ def test_language_tags_are_spoken_as_their_names():
     assert "Brainfuck code block" in announced("brainfuck")
 
 
+def test_a_markdown_heading_is_ended_so_the_voice_knows_it_ended():
+    """Stripping the hashes and leaving the words was enough for the
+    segmenter, which breaks on the blank line after a heading anyway, and not
+    enough for the voice: a line with no terminator is read with the pitch
+    still rising, so every heading in an answer sounded like a sentence that
+    had been cut off. Claude's answers are full of them."""
+    nl = chr(10)
+    out = segment(normalize("## What the numbers say" + nl * 2 + "The table follows."), 320)
+    assert out == ["What the numbers say.", "The table follows."], out
+
+    # The closed style, and a heading that already ends itself.
+    assert segment(normalize("### A smaller one ###"), 320) == ["A smaller one."]
+    assert segment(normalize("## Is it ready?"), 320) == ["Is it ready?"]
+    # Hashes that are not a heading are left alone.
+    assert "#hashtag" in normalize("A #hashtag stays.")
+
+
 def test_a_table_is_read_as_rows_rather_than_as_its_drawing():
     """Claude's answers are full of tables, and one arrived at the voice as
     its own picture: every row beginning and ending with a vertical bar and
