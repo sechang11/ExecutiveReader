@@ -21,6 +21,7 @@ import {
 } from '../../extension/src/content/pagination.js';
 import * as highlight from '../../extension/src/content/highlight.js';
 import { startScrollFollow } from '../../extension/src/content/scroll.js';
+import { surfaceTests } from './surfaces.js';
 
 const results = document.getElementById('results');
 const stage = document.getElementById('stage');
@@ -797,6 +798,12 @@ await test(
     deepEqual(calls, []);
   }),
 );
+
+// The extension's own pages, run whole against a stand-in browser. Kept in
+// their own file because they need a different kind of fixture from everything
+// above: these mount a page and press its buttons rather than calling a
+// function against real elements.
+await surfaceTests({ test, assert, equal, deepEqual, stage });
 
 const summary = document.getElementById('summary');
 summary.textContent = failed

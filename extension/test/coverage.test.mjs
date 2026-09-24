@@ -98,8 +98,8 @@ const KNOWN_UNREACHED = {
   'src/offscreen/offscreen.js': 'message wiring between the worker and the audio graph',
   'src/options/options.js': 'settings page DOM',
   'src/pdf/viewer.js': 'viewer page DOM',
-  'src/popup/popup.js': 'popup DOM',
-  'src/sidepanel/panel.js': 'side panel DOM',
+  'src/popup/popup.js': 'popup DOM; the page is mounted and clicked in tools/domtest/',
+  'src/sidepanel/panel.js': 'side panel DOM; the page is mounted and clicked in tools/domtest/',
   'src/welcome/welcome.js': 'first-run page DOM',
 };
 
