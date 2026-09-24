@@ -19,8 +19,6 @@
  * So the fingerprint governs *confidence*, never control flow. See spec 7.1.
  */
 
-import { tidy } from './normalize.js';
-
 /** How many neighbouring sentences to keep either side, for disambiguation. */
 const CONTEXT = 2;
 
@@ -41,16 +39,6 @@ const CONTEXT = 2;
 
 const ACCEPT = 0.5;
 const TIE_MARGIN = 0.05;
-
-/**
- * A sentence in the form the normalization contract says both halves emit.
- *
- * Imported rather than reimplemented: `tidy` is the contract's own
- * implementation, and a second copy here would be free to drift from the thing
- * it claims to agree with. That is the failure this whole file exists to
- * prevent, one level down.
- */
-const contractual = (s) => tidy(s ?? '');
 
 /**
  * @typedef {{
@@ -234,18 +222,22 @@ export function locate(anchor, sentences, currentStamp = null) {
   // saved before stamping existed must not be reported as rewritten.
   const stampChanged = anchor.stamp != null && currentStamp != null && !stampsAgree;
 
-  // Compare on the form the normalization contract says both halves produce:
-  // runs of spaces and tabs collapsed, ends trimmed, newlines left alone. Two
-  // strings that differ only in that respect cannot both be legal output of the
-  // pipeline, so treating them as different was not strictness — it was
-  // treating a violated invariant as evidence about the page.
+  // Compare on words: whitespace collapsed, case folded, punctuation stripped.
   //
-  // What this deliberately does not do is fold case or drop punctuation.
-  // `exact` means character for character, and a sentence that was recapitalised
-  // or had its apostrophe restyled genuinely is not the same characters. Those
-  // belong to `fuzzy`, which is what it is for.
-  const quote = contractual(anchor.quote);
-  const current = sentences.map(contractual);
+  // This file argued the opposite for a while — that `exact` meant character
+  // for character, so a recapitalised sentence belonged in `fuzzy`. The
+  // vocabulary document said both things, in a table and in the paragraph under
+  // it, and the two halves implemented one each. The user settled it on
+  // 2026-09-21: word for word.
+  //
+  // The reason is what the label is for. `exact` means *say nothing*, so
+  // character equality makes the reader announce a guess about a position that
+  // is certainly right, every time a page comes back with a heading recased or
+  // a typographic quote substituted. The cost is that a wholesale
+  // recapitalisation and a genuine edit look alike here, which is the smaller
+  // loss. See docs/anchor-vocabulary.md.
+  const quote = words(anchor.quote);
+  const current = sentences.map(words);
 
   // 1. Exact. Always attempted, whatever the stamp says.
   const exact = [];

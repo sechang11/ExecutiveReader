@@ -8,6 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { capture, locate, similarity, describe } from '../src/core/anchor.js';
 
 const STAMP = 'sha256:aaaaaaaaaaaaaaaa';
@@ -335,33 +336,96 @@ test('leading and trailing whitespace is still an exact match', () => {
 });
 
 /**
- * The line the contract draws, and this file will not cross alone.
+ * Word for word, which is what the user decided on 2026-09-21.
  *
- * `docs/anchor-vocabulary.md` defines `exact` as character for character, and
- * the normalization contract says in as many words that newlines are left
- * alone. A recapitalised sentence or a restyled apostrophe genuinely is not the
- * same characters, so it belongs to `fuzzy`. The desktop half currently reports
- * these as `exact`; that disagreement is recorded in tools/conformance_anchor.mjs
- * rather than settled by whichever side edited first.
+ * This file used to assert the opposite, because the vocabulary document said
+ * both things — "character for character" in its table and "word for word" in
+ * the paragraph below it — and the two halves implemented one reading each.
+ *
+ * The reason the decision went this way is what the label is for. `exact` means
+ * say nothing to the reader, so character equality would announce a guess about
+ * a position that is certainly right, every time a page comes back with a
+ * heading recased or a typographic quote substituted. The cost is real and
+ * smaller: a wholesale recapitalisation and a genuine edit look alike here.
  */
-test('a recapitalised sentence is not an exact match', () => {
+test('a recapitalised sentence is an exact match', () => {
   const saved = ['Intro.', 'The cat sat down quietly.', 'Tail.'];
   const now = ['Intro.', 'THE CAT SAT DOWN QUIETLY.', 'Tail.'];
 
   const got = locate(capture(saved, 1, STAMP), now, STAMP);
 
-  assert.notEqual(got.how, 'exact', 'case folding is not in the vocabulary');
-  assert.equal(got.index, 1, 'and it still finds the right sentence');
+  assert.equal(got.how, 'exact');
+  assert.equal(got.index, 1);
+  assert.equal(got.verified, true, 'nothing is said to the reader about this');
 });
 
-test('a newline where a space was is not an exact match', () => {
-  // The contract preserves newlines deliberately: on the PDF path a line break
-  // carries layout meaning that a space does not.
+test('one recapitalised word is an exact match too', () => {
+  const saved = ['Intro.', 'The cat sat down quietly.', 'Tail.'];
+  const now = ['Intro.', 'The Cat sat down quietly.', 'Tail.'];
+  assert.equal(locate(capture(saved, 1, STAMP), now, STAMP).how, 'exact');
+});
+
+test('a restyled apostrophe is an exact match', () => {
+  // Punctuation is stripped before comparing, so a typographic substitution on
+  // re-extraction is not an edit.
+  const saved = ['Intro.', "It's a fine day to read.", 'Tail.'];
+  const now = ['Intro.', 'It’s a fine day to read.', 'Tail.'];
+  assert.equal(locate(capture(saved, 1, STAMP), now, STAMP).how, 'exact');
+});
+
+test('a newline where a space was is an exact match', () => {
   const saved = ['Intro.', 'The cat\nsat down quietly.', 'Tail.'];
   const now = ['Intro.', 'The cat sat down quietly.', 'Tail.'];
+  assert.equal(locate(capture(saved, 1, STAMP), now, STAMP).how, 'exact');
+});
+
+test('a changed word is still not an exact match', () => {
+  // The floor under the decision. Folding case and dropping punctuation is not
+  // the same as ignoring the words, and if this ever passed as exact the label
+  // would be worthless.
+  const saved = ['Intro.', 'The cat sat down quietly.', 'Tail.'];
+  const now = ['Intro.', 'The dog sat down quietly.', 'Tail.'];
 
   const got = locate(capture(saved, 1, STAMP), now, STAMP);
 
   assert.notEqual(got.how, 'exact');
-  assert.equal(got.index, 1);
+  assert.equal(got.verified, false, 'the reader is told this is a guess');
+});
+
+test('two sentences that differ only in case are ambiguous, not exact', () => {
+  // Word comparison makes more sentences equal, so the tiebreak matters more
+  // than it did. A quote matching two copies must not resolve as exact.
+  const saved = ['Intro.', 'Same line here.', 'Middle.', 'SAME LINE HERE.', 'Tail.'];
+  const got = locate(capture(saved, 3, STAMP), saved, STAMP);
+
+  assert.equal(got.how, 'ambiguous');
+  assert.equal(got.index, 3, 'the neighbours choose the right copy');
+});
+
+/**
+ * The decision this file's `exact` now depends on.
+ *
+ * `locate()` folds case and strips punctuation because the user decided on
+ * 2026-09-21 that a bookmark matches word for word. That decision lives in a
+ * document, in a different directory, and if it is ever reopened this code is
+ * wrong while every test above still passes — they assert the behaviour, and
+ * the behaviour is only correct because of the decision.
+ *
+ * Reads the table row rather than searching the document. A predecessor of this
+ * check, in the anchor conformance harness, asked whether both phrasings
+ * appeared anywhere; the edit that recorded the decision also used the rejected
+ * phrase while explaining what had been rejected, so both were present and
+ * nothing fired on the one day it existed for. A phrase match across prose
+ * cannot tell a definition from a mention of one.
+ */
+test('the vocabulary still defines exact as word for word', () => {
+  const doc = readFileSync(
+    new URL('../../docs/anchor-vocabulary.md', import.meta.url), 'utf8',
+  );
+  const row = doc.split('\n').find((line) => line.startsWith('| `exact` |'));
+
+  assert.ok(row, 'the summary table no longer has an `exact` row to read');
+  assert.match(row, /word for word/,
+    'locate() folds case because the table says word for word; it no longer does');
+  assert.doesNotMatch(row, /character for character/);
 });

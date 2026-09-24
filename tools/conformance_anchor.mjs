@@ -152,115 +152,44 @@ const CASES = [
  * to call it, which decides what the user is told about how much to trust it.
  */
 /**
- * Read a repository file, for premises that rest on something written down
- * rather than on the corpus.
+ * No premises are attached today, because KNOWN is empty.
  *
- * A wider signature than the segment harness's `holds(CASES)`, deliberately.
- * The reasoning these entries rest on lives in the shared data and in the
- * vocabulary document, not in the case list, and a predicate that cannot reach
- * it would have to be written as prose again — which is the thing that expired.
+ * The mechanism stays — the loop below still runs — and the two helpers it used
+ * are gone rather than kept warm, because unused scaffolding is the shape this
+ * project keeps finding under other names. What they were for is worth keeping
+ * though, and the extension's own suite now carries it: anchor.test.mjs asserts
+ * the vocabulary table still says "word for word", since locate() folds case
+ * only because of that decision and would be silently wrong if it were
+ * reopened. It reads the table ROW, not the document, because a phrase match
+ * across prose cannot tell a definition from a mention of one — which is
+ * exactly how the predecessor of that check failed to fire on the one day it
+ * existed for.
  */
-const read = (rel) => {
-  const text = readFileSync(join(root, rel), 'utf8');
-  return rel.endsWith('.json') ? JSON.parse(text) : text;
-};
-
-/** Whether the vocabulary still contains both of its incompatible definitions. */
-/**
- * Does the vocabulary's summary table still define `exact` as word for word?
- *
- * Reads the table row rather than searching the whole document. Its predecessor
- * asked whether both phrasings appeared anywhere, and the edit that resolved
- * the contradiction also used the rejected phrase while explaining what had
- * been rejected: both were present, the premise held, and nothing fired on the
- * one day it existed for. A phrase match across prose cannot tell a definition
- * from a mention of one.
- */
-function tableDefinesExactAsWordForWord() {
-  const row = read('docs/anchor-vocabulary.md')
-    .split('\n')
-    .find((line) => line.startsWith('| `exact` |'));
-  return Boolean(row) && row.includes('word for word')
-    && !row.includes('character for character');
-}
-
 const KNOWN = new Map([
-  // Not an anchor disagreement, and the diagnosis above it was right: these
-  // were the two halves holding different TEXT for the same page, with the
-  // anchor layer merely where it became visible.
+  // Empty, and the emptiness is the news: the two halves now agree on all 23
+  // cases, including where a bookmark lands AND what it is called.
   //
-  // Two of the three are now gone. `collapse` in shared/normalization.json —
-  // smart quotes, soft hyphens, zero-width characters, dashes, footnote
-  // markers — had every flag set and was read by neither half for the whole of
-  // the project. The extension now implements it, against definitions written
-  // into `_collapse_rules` so both halves can converge on the same ones, and
-  // the non-breaking space and curly apostrophe cases went identical.
+  // Three groups got here by three different routes, worth keeping because
+  // each was mistaken for one of the others at the time.
   //
-  // It was not only an anchor question. The phonemizer looks words up in
-  // CMUdict by literal text, so on the extension "don't" with a curly
-  // apostrophe was pronounced "dawn tee" — most contractions on most
-  // professionally typeset pages, in the neural voices that are the pitch.
+  // Whitespace was neither half's judgement call. `_output_contract` already
+  // required both to collapse runs of spaces and tabs, so two strings differing
+  // only that way could not both be legal pipeline output; comparing them as
+  // different sentences reported a violated invariant as evidence about the
+  // page.
   //
-  // The newline survives because the contract says in as many words that
-  // newlines are left alone, and because they are load-bearing for the desktop
-  // half, whose segmenter splits on them. That makes it the same structural
-  // difference as the layout group in conformance_segment.mjs rather than a
-  // bug in either side.
-  ['ws: newline instead of space', {
-    python: 'exact',
-    js: 'fuzzy',
-    premise: {
-      describe: 'the output contract says newlines are left alone, so a quote '
-        + 'differing by one differs in characters and cannot be an exact match',
-      holds: () => read('shared/normalization.json')._output_contract
-        .includes('Newlines are left alone'),
-    },
-  }],
-
-  // RESOLVED by the user on 2026-09-21: `exact` means word for word.
+  // The non-breaking space and the curly apostrophe were not anchor questions
+  // at all. The `collapse` section of shared/normalization.json had every flag
+  // set and was read by neither half, so the two held different TEXT for the
+  // same page and the anchor layer was merely where it showed. Implementing it
+  // resolved them without touching this ladder — and fixed the extension
+  // pronouncing "don't" as "dawn tee", which was the same bug wearing its
+  // audible face.
   //
-  // These two stopped being a shared open question that day and became the
-  // extension's deviation. It compares raw strings; the decision is that
-  // comparison is on words, with whitespace collapsed, case folded and
-  // punctuation stripped, which is the desktop half's existing behaviour. So
-  // the extension is the side that changes and these entries are its migration,
-  // in the same shape as the bracketed-footnote one the desktop half carried.
-  //
-  // The reason, kept here because an entry that outlives the argument is how
-  // the last one went stale: `exact` means say nothing to the user. Character
-  // equality would announce a guess about a position that is certainly right,
-  // every time a page is re-extracted with a heading recased.
-  //
-  // The premise is now the decision rather than the contradiction, and it goes
-  // the other way: these are tolerable only while the document still says word
-  // for word. Reopen the question and this fails, which is right, because then
-  // they are not a migration any more.
-  //
-  // A caution earned the hard way. The previous premise asked whether both
-  // phrasings still appeared anywhere in the document, and the edit that
-  // resolved the contradiction ALSO used the words "character for character"
-  // while explaining what had been rejected. Both phrases were present, the
-  // premise held, and nothing fired on the day it was supposed to. Matching a
-  // phrase across a whole prose file cannot tell a definition from a mention of
-  // one, which is the same failure as matching source text instead of calling
-  // the behaviour. This one reads the table row.
-  ['case: sentence recapitalised', {
-    python: 'exact',
-    js: 'fuzzy',
-    premise: {
-      describe: 'the vocabulary table still defines exact as word for word, so '
-        + 'these remain the extension\'s migration rather than an open question',
-      holds: tableDefinesExactAsWordForWord,
-    },
-  }],
-  ['case: one word recapitalised', {
-    python: 'exact',
-    js: 'fuzzy',
-    premise: {
-      describe: 'as above: the decision still stands in the table',
-      holds: tableDefinesExactAsWordForWord,
-    },
-  }],
+  // Case and the newline were a genuine contract dispute, and neither half
+  // could settle it because docs/anchor-vocabulary.md answered it twice and
+  // differently. The user decided on 2026-09-21: word for word. The extension
+  // changed, which is what the migration entries here recorded until it did.
 ]);
 
 const py = process.env.EXECUTIVE_READER_PYTHON
