@@ -22,6 +22,7 @@ import {
 import * as highlight from '../../extension/src/content/highlight.js';
 import { startScrollFollow } from '../../extension/src/content/scroll.js';
 import { surfaceTests } from './surfaces.js';
+import { contentTests } from './content.js';
 
 const results = document.getElementById('results');
 const stage = document.getElementById('stage');
@@ -804,6 +805,11 @@ await test(
 // above: these mount a page and press its buttons rather than calling a
 // function against real elements.
 await surfaceTests({ test, assert, equal, deepEqual, stage });
+
+// And the content script whole, rather than the pieces it composes. Those are
+// covered above one at a time, which says nothing about whether they are put
+// together correctly.
+await contentTests({ test, assert, equal, deepEqual, stage });
 
 const summary = document.getElementById('summary');
 summary.textContent = failed

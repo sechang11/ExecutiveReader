@@ -75,7 +75,7 @@ const KNOWN_UNREACHED = {
   // actually runs of them is closeOffscreen on a stop and looksLikePdf on a
   // URL that is not one. KNOWN_UNEXERCISED below is the finer measure, and
   // this list has never claimed to be it.
-  'src/content/index.js': 'live DOM, ranges and chrome messaging',
+  'src/content/index.js': 'live DOM, ranges and chrome messaging; driven end to end in tools/domtest/',
   'src/content/loader.js': 'four lines of dynamic import into a page context',
   'src/content/highlight.js': 'CSS Custom Highlight API, which has no Node equivalent; covered by tools/domtest/',
   'src/content/scroll.js': 'scroll position and wheel events; covered by tools/domtest/',
