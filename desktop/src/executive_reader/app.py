@@ -26,6 +26,11 @@ from .tts.registry import Registry
 #: tell a preview from anything the user actually asked to hear.
 PREVIEW_TITLE = "Voice preview"
 
+#: How often to re-ask which conversation is live. Every poll would be
+#: wasteful and every switch-on would be too rare; a few seconds is quicker
+#: than anyone can type a message and read the answer.
+CLAUDE_RESCAN = 4.0
+
 
 def _noop(*_a, **_k) -> None:
     pass
@@ -96,12 +101,57 @@ class App:
         self._claude_tail: ct.Tail | None = None
         self._claude_thread: threading.Thread | None = None
         self._claude_stop = threading.Event()
+        self._claude_checked = 0.0
         self._sleep_timer: threading.Timer | None = None
+
+        self._claim_some_cpu()
+        self._warm_up()
 
         if self.config.clipboard_watch:
             self.set_clipboard_watch(True)
         if self.config.claude_watch:
             self.set_claude_watch(True)
+
+    # --- getting a word out quickly --------------------------------------
+    def _claim_some_cpu(self) -> None:
+        """Ask Windows to schedule this ahead of batch work.
+
+        Synthesis has to keep ahead of playback or the voice stutters, and it
+        only manages between one and two times real time on this machine
+        because every core is busy with long-running jobs that do not care
+        when they finish. Speech does care: a second late is audible and
+        cannot be made up.
+
+        Above normal, not high: enough to win against work that is happy to
+        wait, not enough to interfere with anything the person is doing.
+        """
+        try:
+            import win32api
+            import win32process
+            win32process.SetPriorityClass(
+                win32api.GetCurrentProcess(),
+                win32process.ABOVE_NORMAL_PRIORITY_CLASS)
+        except Exception:
+            pass
+
+    def _warm_up(self) -> None:
+        """Load the voice before anything needs it.
+
+        The first synthesis of a session pays for reading the model off disk
+        and building its graph, measured at about four seconds on top of the
+        render itself. Paid at startup it costs nobody anything; paid on the
+        first reply it is four seconds of silence after the answer arrives,
+        which reads as the app having missed it.
+        """
+        warm = getattr(self.registry, "warm", None)
+        if warm is None:
+            return
+
+        def prepare() -> None:
+            warm(self.config.engine, self.config.voice)
+
+        threading.Thread(target=prepare, daemon=True,
+                         name="executive-reader-warmup").start()
 
     # --- reader events ---------------------------------------------------
     def _state_changed(self, state: str) -> None:
@@ -288,7 +338,7 @@ class App:
     # --- claude ----------------------------------------------------------
     def read_claude_session(self, path: Path | None = None,
                             last_n: int | None = None) -> None:
-        target = path or ct.latest_session()
+        target = path or self.claude_target() or ct.latest_session()
         if target is None:
             self.on_error("No Claude Code transcripts were found.")
             return
@@ -330,9 +380,11 @@ class App:
         self._stop_claude_watch()
         if not enabled:
             return
-        target = ct.latest_session(ct.projects_dir(self.config.claude_projects_dir))
+        target = self.claude_target()
         if target is None:
-            self.on_error("No Claude Code transcripts were found.")
+            self.on_error(
+                "No Claude Code conversation to follow yet. Say something to "
+                "Claude and it will pick that conversation up.")
             self.config.claude_watch = False
             return
         self._claude_tail = ct.Tail(target, self.config.claude_read_thinking)
@@ -360,14 +412,34 @@ class App:
         """
         if self._claude_stop.is_set():
             return
-        newest = ct.latest_session(ct.projects_dir(self.config.claude_projects_dir))
-        if newest is None:
+        now = time.monotonic()
+        if self._claude_tail is not None and now - self._claude_checked < CLAUDE_RESCAN:
+            return
+        self._claude_checked = now
+        target = self.claude_target()
+        if target is None:
             return
         tail = self._claude_tail
-        if tail is not None and Path(tail.path) == Path(newest):
+        if tail is not None and Path(tail.path) == Path(target):
             return
-        self._claude_tail = ct.Tail(newest, self.config.claude_read_thinking)
-        self.on_claude_session(newest)
+        self._claude_tail = ct.Tail(target, self.config.claude_read_thinking)
+        self.on_claude_session(target)
+
+    def claude_target(self) -> Path | None:
+        """The conversation to follow: the pinned one, or the live one."""
+        pinned = (self.config.claude_session or "").strip()
+        if pinned:
+            chosen = Path(pinned)
+            return chosen if chosen.is_file() else None
+        return ct.active_session(ct.projects_dir(self.config.claude_projects_dir))
+
+    def set_claude_session(self, path) -> None:
+        """Stay on one conversation, or blank to follow the live one."""
+        self.config.claude_session = str(path) if path else ""
+        self.config.save()
+        self._claude_checked = 0.0
+        if self.config.claude_watch:
+            self.set_claude_watch(True)
 
     def _claude_loop(self) -> None:
         while not self._claude_stop.is_set():

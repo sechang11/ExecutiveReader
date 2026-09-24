@@ -11,6 +11,7 @@ suite means the same thing on another one.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import time
@@ -1592,6 +1593,149 @@ def test_the_marker_picks_the_right_run_when_a_word_repeats():
     assert [w.text for w in marked] == ["the", "dog", "ran", "away", "quickly"], \
         [w.text for w in marked]
     assert marked[0].left == words[5].left, "matched the first 'the', not the right one"
+
+
+# --- which conversation you are in ---------------------------------------
+
+def _entry(kind, **rest):
+    import json as _json
+    body = {"type": kind}
+    body.update(rest)
+    return _json.dumps(body) + chr(10)
+
+
+def _typed(text, stamp):
+    return _entry("user", timestamp=stamp, message={"role": "user", "content": text})
+
+
+def _tool_result(stamp):
+    return _entry("user", timestamp=stamp, message={"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": "x", "content": "output"}]})
+
+
+def _reply(text, stamp):
+    return _entry("assistant", timestamp=stamp, message={"role": "assistant",
+                  "content": [{"type": "text", "text": text}]})
+
+
+def test_a_tool_answering_is_not_a_person_typing():
+    """Both arrive as user entries, and there are twenty tool results for
+    every typed line, so following "recent user activity" would follow the
+    busiest agent on the machine."""
+    from executive_reader.capture import claude_transcript as ct
+    import json
+
+    assert ct.was_typed(json.loads(_typed("hello there", "2026-09-24T06:00:00Z")))
+    assert not ct.was_typed(json.loads(_tool_result("2026-09-24T06:00:01Z")))
+    assert not ct.was_typed(json.loads(_reply("hi", "2026-09-24T06:00:02Z")))
+    # A typed message can also arrive as text blocks rather than a string.
+    assert ct.was_typed({"type": "user", "message": {"role": "user", "content": [
+        {"type": "text", "text": "typed as blocks"}]}})
+    # An empty one is not somebody typing.
+    assert not ct.was_typed({"type": "user", "message": {"role": "user",
+                                                         "content": "   "}})
+
+
+def test_the_conversation_you_are_in_is_the_one_you_typed_in():
+    """Not the newest file. Agents write far more often than people type, so
+    the newest transcript on a busy machine belongs to a robot."""
+    from executive_reader.capture import claude_transcript as ct
+
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        root = Path(tmp)
+        (root / "proj-a").mkdir()
+        (root / "proj-b").mkdir()
+        ct.forget_sessions()
+
+        # A busy agent: written constantly, never typed in.
+        agent = root / "proj-a" / "agent.jsonl"
+        agent.write_text(_reply("Working.", "2026-09-24T06:00:00Z")
+                         + _tool_result("2026-09-24T06:00:01Z") * 40,
+                         encoding="utf-8")
+        os.utime(agent, (9000, 9000))
+
+        # A conversation, typed in a while ago and quiet since.
+        mine = root / "proj-b" / "mine.jsonl"
+        mine.write_text(_typed("do the thing", "2026-09-24T05:00:00Z")
+                        + _reply("Done.", "2026-09-24T05:00:01Z"),
+                        encoding="utf-8")
+        os.utime(mine, (1000, 1000))
+
+        assert Path(ct.active_session(root)) == mine, \
+            "followed the agent because its file was newer"
+
+        listed = ct.conversations(root)
+        assert [c.path.name for c in listed][0] == "mine.jsonl", listed
+        by_name = {c.path.name: c for c in listed}
+        assert by_name["mine.jsonl"].by_hand
+        assert not by_name["agent.jsonl"].by_hand
+        assert by_name["agent.jsonl"].certainly_an_agent, \
+            "a small file read end to end is known to be an agent"
+
+        # Type in the other one and it takes over.
+        ct.forget_sessions()
+        with open(agent, "a", encoding="utf-8") as fh:
+            fh.write(_typed("actually, do this instead", "2026-09-24T07:00:00Z"))
+        assert Path(ct.active_session(root)) == agent
+
+
+def test_a_conversation_is_named_the_way_the_sidebar_names_it():
+    from executive_reader.capture import claude_transcript as ct
+
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        root = Path(tmp)
+        folder = root / "C--Users-me-Documents-Work-Invoices"
+        folder.mkdir()
+        ct.forget_sessions()
+        path = folder / "abcd1234-0000.jsonl"
+        path.write_text(
+            _typed("start", "2026-09-24T06:00:00Z")
+            + _entry("custom-title", customTitle="Invoice chaser")
+            + _entry("agent-name", agentName="Billing"),
+            encoding="utf-8")
+
+        found = ct.describe_session(path)
+        # The agent name wins: it is what the sidebar shows.
+        assert found.title == "Billing", found.title
+        assert found.project == "Invoices", found.project
+
+        # With no name at all, the file identifies it rather than nothing.
+        ct.forget_sessions()
+        bare = folder / "ffff0000-1111.jsonl"
+        bare.write_text(_reply("hello", "2026-09-24T06:00:00Z"), encoding="utf-8")
+        assert ct.describe_session(bare).title == "ffff0000"
+
+
+def test_asking_again_only_reads_what_was_added():
+    """A full read of every transcript costs tens of megabytes, and the list
+    refreshes while you look at it."""
+    from executive_reader.capture import claude_transcript as ct
+
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        root = Path(tmp)
+        folder = root / "proj"
+        folder.mkdir()
+        ct.forget_sessions()
+        path = folder / "s.jsonl"
+        path.write_text(_typed("first", "2026-09-24T05:00:00Z"), encoding="utf-8")
+
+        first = ct.describe_session(path)
+        assert first.by_hand
+        scanned = first._scanned
+        assert scanned > 0
+
+        # Nothing added: the same object comes back, nothing re-read.
+        again = ct.describe_session(path)
+        assert again is first
+        assert again._scanned == scanned
+
+        # Something added: only the new bytes matter, and the earlier answer
+        # is not lost by looking at them.
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(_reply("a reply", "2026-09-24T05:00:01Z"))
+        grown = ct.describe_session(path)
+        assert grown.by_hand, "forgot that somebody had typed, on a re-read"
+        assert grown._scanned > scanned
 
 
 if __name__ == "__main__":

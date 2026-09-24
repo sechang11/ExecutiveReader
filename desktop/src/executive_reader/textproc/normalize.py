@@ -42,7 +42,10 @@ _SOFT_WRAP = re.compile(r"([A-Za-z0-9,;:)\]\"'%])\n[ \t]*(?=[a-z(])")
 # A short line with no terminator followed by a capital really is a heading.
 _HEADING_LINE = re.compile(r"^([^\n]{1,70}[A-Za-z0-9\"')\]])\n(?=[A-Z])", re.M)
 
-_FENCE = re.compile(r"```.*?```", re.S)
+# The language and the body are captured so a block can be announced as what
+# it is: "PowerShell code block, two lines" rather than a bare "code block",
+# or, as it used to be when the setting was off, complete silence.
+_FENCE = re.compile(r"```([^\n`]*)\n?(.*?)```", re.S)
 _INLINE_CODE = re.compile(r"`([^`\n]+)`")
 _MD_HEAD = re.compile(r"^\s{0,3}#{1,6}\s+", re.M)
 _MD_BULLET = re.compile(r"^\s*[-*+\u2022]\s+", re.M)
@@ -367,6 +370,127 @@ def flatten_lists(text: str) -> str:
     return chr(10).join(out)
 
 
+# --- code blocks ---------------------------------------------------------
+#
+# shared/normalization.json has said "announce: say 'code block, twelve
+# lines' and skip" since the rules were written, and neither half implemented
+# it. The desktop replaced a fence with the words "Code block." when told to
+# skip, and with nothing at all otherwise -- so the setting named
+# skip_code_blocks removed the code either way, and leaving it off deleted
+# code silently. Someone listening to an answer full of commands was not told
+# the commands existed.
+#
+# The line count is what makes the announcement worth hearing: "code block,
+# two lines" is a command you may want to look at, "code block, ninety lines"
+# is a file you do not.
+
+#: Counted from the shared rules, with the shared default if they are missing.
+_CODE_MODES = ("read", "announce", "skip")
+
+#: How to say the tags people actually write on a fence. Capitalising the tag
+#: gives "Powershell" and "Json", which are not words and are not pronounced
+#: like the things they name.
+_LANGUAGE_NAMES = {
+    "powershell": "PowerShell", "ps1": "PowerShell", "pwsh": "PowerShell",
+    "sh": "Shell", "bash": "Shell", "zsh": "Shell", "shell": "Shell",
+    "cmd": "Command prompt", "bat": "Batch",
+    "py": "Python", "python": "Python",
+    "js": "JavaScript", "javascript": "JavaScript", "jsx": "JavaScript",
+    "ts": "TypeScript", "typescript": "TypeScript", "tsx": "TypeScript",
+    "json": "JSON", "yaml": "YAML", "yml": "YAML", "toml": "TOML",
+    "html": "HTML", "css": "CSS", "sql": "SQL", "xml": "XML", "md": "Markdown",
+    "c": "C", "cpp": "C plus plus", "cs": "C sharp", "java": "Java",
+    "go": "Go", "rs": "Rust", "rust": "Rust", "rb": "Ruby", "php": "PHP",
+    "diff": "Diff", "patch": "Patch", "text": "Plain text", "txt": "Plain text",
+}
+
+
+def code_mode(setting: bool | None = None) -> str:
+    """How to handle a fenced code block: read, announce or skip.
+
+    The boolean the desktop settings screen offers is kept as an override so
+    nobody's saved choice is lost: ticking "skip code blocks" means skip.
+    """
+    if setting:
+        return "skip"
+    mode = (shared_rules.load("normalization").get("code_blocks") or {}).get("mode")
+    return mode if mode in _CODE_MODES else "announce"
+
+
+def _announce(match, mode: str) -> str:
+    if mode == "read":
+        return match.group(0)
+    if mode == "skip":
+        return " \n\n "
+    tagged = (match.group(1) or "").strip().split()[:1]
+    body = match.group(2) or ""
+    lines = len([line for line in body.splitlines() if line.strip()])
+    tag = tagged[0].lower() if tagged else ""
+    name = _LANGUAGE_NAMES.get(tag, tag.capitalize() if tag else "")
+    what = (name + " code block") if name else "Code block"
+    if lines:
+        what += ", " + str(lines) + (" line" if lines == 1 else " lines")
+    return " \n\n " + what + ". \n\n "
+
+
+# --- tables --------------------------------------------------------------
+
+#: The dashes under a table's header. Required before anything is treated as
+#: a table, so a shell pipeline in prose is never mistaken for one.
+_TABLE_SEPARATOR = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)+\|?\s*$")
+
+
+def _cells(line: str) -> list:
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        stripped = stripped[:-1]
+    return [cell.strip() for cell in stripped.split("|")]
+
+
+def _row(cells: list) -> str:
+    said = ", ".join(cell for cell in cells if cell)
+    if not said:
+        return ""
+    return said if said[-1] in ".!?:;" else said + "."
+
+
+def flatten_tables(text: str) -> str:
+    """Say a table instead of reading its punctuation.
+
+    A markdown table reached the voice as its own drawing: every row began
+    and ended with a vertical bar and the cells ran together with no pause
+    between them. Claude's answers are full of tables, so this was a large
+    part of how one sounded.
+
+    A row is a list of things, so it is read as one. The header is said once,
+    which is what makes the rows afterwards mean anything.
+    """
+    lines = text.split(chr(10))
+    out: list = []
+    at = 0
+    while at < len(lines):
+        header = lines[at]
+        if (at + 1 < len(lines) and "|" in header
+                and _TABLE_SEPARATOR.match(lines[at + 1] or "")):
+            spoken = []
+            names = [cell for cell in _cells(header) if cell]
+            if names:
+                spoken.append("Table: " + ", ".join(names) + ".")
+            at += 2
+            while at < len(lines) and "|" in lines[at] and lines[at].strip():
+                said = _row(_cells(lines[at]))
+                if said:
+                    spoken.append(said)
+                at += 1
+            out.extend(spoken)
+            continue
+        out.append(header)
+        at += 1
+    return chr(10).join(out)
+
+
 def normalize(text: str, *, skip_code: bool = False, urls: str = "domain") -> str:
     """Return text shaped for speech. Order matters: structure, then content."""
     if not text:
@@ -387,8 +511,12 @@ def normalize(text: str, *, skip_code: bool = False, urls: str = "domain") -> st
     text = apply_collapse(text)
     text = _nfkc_preserving_symbols(text)
 
-    text = _FENCE.sub(" \n\n Code block. \n\n " if skip_code else " \n\n ", text)
+    mode = code_mode(skip_code)
+    text = _FENCE.sub(lambda m: _announce(m, mode), text)
     text = _INLINE_CODE.sub(r"\1", text)
+    # Tables become sentences before the stray-separator rule runs; what
+    # reaches that now is a separator with no table around it.
+    text = flatten_tables(text)
     text = _TABLE_RULE.sub("", text)
     text = _MD_IMG.sub(lambda m: f" image, {m.group(1)} " if m.group(1) else " image ", text)
     text = _MD_LINK.sub(r"\1", text)

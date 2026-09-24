@@ -141,8 +141,24 @@ def _cap(segment: str, limit: int) -> list[str]:
     return final
 
 
-def segment(text: str, max_chars: int = 320) -> list[str]:
-    """Return speakable segments in reading order."""
+#: A shorter cap for the opening segment only.
+#:
+#: Nothing is heard until the first one has been synthesized, and synthesis
+#: costs roughly a fixed second and a half plus a bit per character. So the
+#: opening sentence sets how long the silence is before a reply starts, and a
+#: long one costs several seconds of it while the rest of the text waits.
+#: Cutting only the first means the voice starts sooner and the remainder is
+#: rendered while it speaks, which is time that was being wasted anyway.
+FIRST_SEGMENT_CHARS = 110
+
+
+def segment(text: str, max_chars: int = 320,
+            first_chars: int = FIRST_SEGMENT_CHARS) -> list[str]:
+    """Return speakable segments in reading order.
+
+    The first is capped shorter than the rest so speech begins sooner; see
+    FIRST_SEGMENT_CHARS. Pass first_chars=0 to cap everything the same.
+    """
     segments: list[str] = []
     # Blank lines are hard breaks: never merge across a paragraph boundary.
     for para in re.split(r"\n\s*\n+", text):
@@ -155,4 +171,7 @@ def segment(text: str, max_chars: int = 320) -> list[str]:
                 continue
             for sent in _split_sentences(line):
                 segments.extend(_cap(sent, max_chars))
-    return [s for s in segments if any(c.isalnum() for c in s)]
+    kept = [s for s in segments if any(c.isalnum() for c in s)]
+    if first_chars and kept and len(kept[0]) > first_chars:
+        kept = _cap(kept[0], first_chars) + kept[1:]
+    return kept

@@ -13,10 +13,14 @@ apart from the interface around it. Every one of those is a problem this file
 does not have, because none of them are problems about text. They were
 problems about pixels.
 
-So this is the first tab, switched on, and the screen area is what it always
-should have been: the way to read something that will not give up its text.
+The hard question here is not how to read a conversation, it is which one.
+A machine with a dozen Claude sessions on it has a dozen transcripts being
+appended to, most of them by agents nobody is watching. So the default is the
+conversation you most recently typed in, and the list lets you stay on one.
 """
 from __future__ import annotations
+
+import time
 
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QGroupBox,
@@ -27,22 +31,35 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QGroupBox,
 from ..capture import claude_transcript as ct
 
 #: Enough to pick one out without turning the tab into a file browser.
-RECENT_SESSIONS = 12
+RECENT_SESSIONS = 25
+
+#: Qt's per-item user data slot.
+_PATH = 32
 
 
-def describe(path) -> str:
-    """A conversation, named the way a person would recognise it.
+def when(stamp: float) -> str:
+    """How long ago, in the units a person would use."""
+    if not stamp:
+        return "no one has typed in it"
+    minutes = max(0, (time.time() - stamp) / 60.0)
+    if minutes < 1:
+        return "just now"
+    if minutes < 90:
+        return "%d minutes ago" % minutes
+    hours = minutes / 60.0
+    if hours < 36:
+        return "%d hours ago" % hours
+    return "%d days ago" % (hours / 24.0)
 
-    The file name is a UUID and the folder is the project path with the
-    separators beaten out of it, so neither is worth showing as it stands.
-    """
-    if path is None:
+
+def describe(conversation) -> str:
+    """One line for the list: what it is called, where, and how recent."""
+    if conversation is None:
         return "nothing yet"
-    project = path.parent.name.replace("-", "/").strip("/")
-    while "//" in project:
-        project = project.replace("//", "/")
-    short = project.rsplit("/", 1)[-1] or project
-    return short + "  ·  " + path.stem[:8]
+    tail = "   ·   " + when(conversation.last_typed)
+    if not conversation.by_hand:
+        tail = "   ·   an agent, not you"
+    return conversation.title + "   ·   " + conversation.project + tail
 
 
 class ClaudeTab(QWidget):
@@ -86,65 +103,80 @@ class ClaudeTab(QWidget):
         self.chk_thinking.stateChanged.connect(self._thinking_toggled)
         inner.addWidget(self.chk_thinking)
 
+        self.chk_auto = QCheckBox("Follow whichever conversation I am typing in")
+        self.chk_auto.setChecked(not (app.config.claude_session or "").strip())
+        self.chk_auto.setToolTip(
+            "Moves with you as you switch conversations. Untick it, or pick "
+            "one from the list, to stay on a single conversation.")
+        self.chk_auto.stateChanged.connect(self._auto_toggled)
+        inner.addWidget(self.chk_auto)
+
         self.lbl_following = QLabel("Following: nothing yet")
-        self.lbl_following.setToolTip(
-            "Whichever conversation is being written to. Start a new one and "
-            "this follows it across by itself.")
         inner.addWidget(self.lbl_following)
 
         row = QHBoxLayout()
-        last = QPushButton("Read the last reply")
-        last.setMinimumHeight(40)
-        last.clicked.connect(lambda: self._read_recent(1))
-        row.addWidget(last)
-
-        several = QPushButton("Read the last six")
-        several.setMinimumHeight(40)
-        several.clicked.connect(lambda: self._read_recent(6))
-        row.addWidget(several)
-
-        whole = QPushButton("Read the whole conversation")
-        whole.setMinimumHeight(40)
-        whole.clicked.connect(lambda: self._read_recent(None))
-        row.addWidget(whole)
+        for label, count in (("Read the last reply", 1),
+                             ("Read the last six", 6),
+                             ("Read the whole conversation", None)):
+            button = QPushButton(label)
+            button.setMinimumHeight(40)
+            button.setToolTip("Reads the conversation named above.")
+            button.clicked.connect(lambda _c=False, n=count: self._read_recent(n))
+            row.addWidget(button)
         inner.addLayout(row)
         layout.addWidget(box)
 
         layout.addWidget(QLabel(
-            "Recent conversations, newest first. Click one to read it."))
+            "Your conversations, most recently typed in first. "
+            "Click one to stay on it."))
         self.sessions = QListWidget()
         self.sessions.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.sessions.itemClicked.connect(self._read_session)
+        self.sessions.itemClicked.connect(self._pin)
         layout.addWidget(self.sessions, 1)
 
         app.on_claude_session = self._session_changed
+        # The list ages as you look at it, and conversations come and go.
+        self._ticker = QTimer(self)
+        self._ticker.setInterval(15000)
+        self._ticker.timeout.connect(self.refresh)
+        self._ticker.start()
         self.refresh()
 
     # --- state -----------------------------------------------------------
     def refresh(self) -> None:
         root = ct.projects_dir(self.app.config.claude_projects_dir)
-        found = ct.sessions(root, limit=RECENT_SESSIONS)
+        found = ct.conversations(root, limit=RECENT_SESSIONS)
+        target = self.app.claude_target()
         self.sessions.clear()
-        for path in found:
-            item = QListWidgetItem(describe(path))
-            item.setData(32, str(path))
+        for conversation in found:
+            item = QListWidgetItem(describe(conversation))
+            item.setData(_PATH, str(conversation.path))
+            if target is not None and str(conversation.path) == str(target):
+                font = item.font()
+                font.setBold(True)
+                item.setFont(font)
+            if not conversation.by_hand:
+                item.setToolTip("Nobody has typed in this one, so it is an "
+                                "agent working on its own. It is never "
+                                "followed unless you pick it.")
             self.sessions.addItem(item)
-        self.lbl_following.setText(
-            "Following: " + describe(found[0] if found else None))
+        self._show_target(target, found)
         if not found:
             self.status.emit(
                 "No Claude Code conversations found under " + str(root) + ".")
 
+    def _show_target(self, target, found: list) -> None:
+        match = next((c for c in found
+                      if target is not None and str(c.path) == str(target)), None)
+        how = ("following whatever you type in"
+               if self.chk_auto.isChecked() else "staying on this one")
+        self.lbl_following.setText(
+            "Reading: " + (describe(match) if match else "nothing yet")
+            + "      (" + how + ")")
+
     def _session_changed(self, path) -> None:
         """The watcher moved to another conversation, on its own thread."""
-        QTimer.singleShot(0, lambda: self._show_session(path))
-
-    def _show_session(self, path) -> None:
-        self.lbl_following.setText("Following: " + describe(path))
-        self.refresh_soon()
-
-    def refresh_soon(self) -> None:
-        QTimer.singleShot(250, self.refresh)
+        QTimer.singleShot(0, self.refresh)
 
     # --- actions ---------------------------------------------------------
     def _watch_toggled(self) -> None:
@@ -165,11 +197,25 @@ class ClaudeTab(QWidget):
         if self.app.config.claude_watch:
             self.app.set_claude_watch(True)
 
+    def _auto_toggled(self) -> None:
+        if self.chk_auto.isChecked():
+            self.app.set_claude_session(None)
+            self.status.emit("Following whichever conversation you type in.")
+        elif not (self.app.config.claude_session or "").strip():
+            # Nothing pinned yet, so hold the one being read right now.
+            self.app.set_claude_session(self.app.claude_target())
+        self.refresh()
+
+    def _pin(self, item) -> None:
+        path = item.data(_PATH)
+        if not path:
+            return
+        self.chk_auto.blockSignals(True)
+        self.chk_auto.setChecked(False)
+        self.chk_auto.blockSignals(False)
+        self.app.set_claude_session(path)
+        self.status.emit("Staying on " + item.text().split("   ·   ")[0] + ".")
+        self.refresh()
+
     def _read_recent(self, last_n) -> None:
         self.app.read_claude_session(last_n=last_n)
-
-    def _read_session(self, item) -> None:
-        from pathlib import Path
-        path = item.data(32)
-        if path:
-            self.app.read_claude_session(Path(path))

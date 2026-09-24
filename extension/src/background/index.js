@@ -50,25 +50,69 @@ const pronunciationReady = (async () => {
 const BLANK = {
   status: 'idle', tabId: null, index: 0, texts: [], exact: [],
   voiceKey: null, speed: 1, volume: 1, url: null, title: null,
-  // Off by default: reading on past the end of the page is a power-user
-  // behaviour, and the accessible default is not to navigate unasked.
-  // See spec section 15.
-  autoAdvance: false,
+  /**
+   * Pages this read has already been through, so auto-advance cannot cycle.
+   *
+   * Two pages that each name the other as "next" is an ordinary shape for a
+   * two-part article, and with auto-advance on it reads them alternately
+   * forever. The content script already refuses a link pointing at the page it
+   * is on; that says nothing about the page before it.
+   *
+   * A visited set rather than a hop limit, because any limit is a guess about
+   * how long a legitimate article can be, and this rules out only the thing
+   * that is actually wrong.
+   */
+  visited: [],
 };
+
+/**
+ * Defaults for the things the user chooses, kept out of `BLANK` on purpose.
+ *
+ * `BLANK` is spread over the state on every stop to clear the current read.
+ * A setting listed there is cleared with it, which is how "continue onto the
+ * next page" came to reset itself the moment anyone pressed play.
+ *
+ * Auto-advance is off by default: reading on past the end of the page is a
+ * power-user behaviour, and the accessible default is not to navigate unasked.
+ * See spec section 15.
+ */
+const SETTING_DEFAULTS = { autoAdvance: false };
 
 /** Aborts the in-flight sentence. Not persisted; recreated on resume. */
 let currentAbort = null;
 
+/**
+ * Settings live in `chrome.storage.local` rather than `session`, because
+ * session storage is cleared when the browser restarts and a preference must
+ * not be. See SETTING_DEFAULTS above for why they are not part of BLANK.
+ */
+const SETTINGS = Object.keys(SETTING_DEFAULTS);
+
 /** @returns {Promise<State>} */
 async function getState() {
-  const { state } = await chrome.storage.session.get('state');
-  return { ...BLANK, ...(state ?? {}) };
+  const [{ state }, saved] = await Promise.all([
+    chrome.storage.session.get('state'),
+    chrome.storage.local.get(SETTINGS),
+  ]);
+  // Session wins where it holds a value, so a change made during a read is
+  // live at once; local supplies it after a restart, when session is empty.
+  const settings = Object.fromEntries(
+    SETTINGS.filter((k) => saved[k] !== undefined).map((k) => [k, saved[k]]),
+  );
+  return { ...BLANK, ...SETTING_DEFAULTS, ...settings, ...(state ?? {}) };
 }
 
 /** @param {Partial<State>} patch */
 async function setState(patch) {
   const next = { ...(await getState()), ...patch };
   await chrome.storage.session.set({ state: next });
+  // A setting that was actually set is written where it survives a restart.
+  // Only when the patch names it: every stop spreads BLANK over the state, and
+  // persisting that would be the same bug one layer down.
+  const changed = SETTINGS.filter((k) => k in patch);
+  if (changed.length) {
+    await chrome.storage.local.set(Object.fromEntries(changed.map((k) => [k, next[k]])));
+  }
   chrome.runtime.sendMessage({ type: 'state', state: next }).catch(() => {});
   return next;
 }
@@ -161,6 +205,11 @@ async function advancePage(state) {
   }
   if (!next?.url) return false;
 
+  // Already read in this session: following it would loop rather than advance.
+  // Silent, because there is nothing for the reader to decide — the article
+  // has ended, which is exactly what stopping here means.
+  if ((state.visited ?? []).includes(next.url)) return false;
+
   if (needsConfirmationFor(next)) {
     chrome.runtime.sendMessage({
       type: 'confirm-next-page', target: 'panel', next,
@@ -184,6 +233,7 @@ async function advancePage(state) {
     exact: doc.exact ?? [],
     url: doc.url,
     title: doc.title,
+    visited: [...(state.visited ?? []), next.url],
   });
   return true;
 }
@@ -282,6 +332,9 @@ async function startReading(tabId, opts = {}) {
     exact: doc.exact ?? [],
     url: doc.url,
     title: doc.title,
+    // Seeded with where this read began, so the first advance cannot come
+    // straight back here.
+    visited: doc.url ? [doc.url] : [],
   });
 
   runLoop().catch((e) => console.error('[executive-reader] read loop failed', e));

@@ -72,6 +72,11 @@ class Config:
     claude_watch: bool = True
     claude_watch_chosen: bool = False
     claude_read_thinking: bool = False
+    #: A conversation to stay on. Blank follows whichever one you last typed
+    #: in, which is the one whose reply you are waiting for. Following the
+    #: most recently written file instead meant following whichever agent
+    #: flushed last, and agents write far more often than people type.
+    claude_session: str = ""
     claude_projects_dir: str = ""   # blank = %USERPROFILE%/.claude/projects
 
     # --- capture ---

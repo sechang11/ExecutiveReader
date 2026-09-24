@@ -481,11 +481,11 @@ def test_toggling_the_claude_watch_never_leaves_two_readers():
     fresh tail and carried on, and two threads polling one Tail share a file
     offset: a reply is then spoken twice, or swallowed.
     """
-    saved = app_module.ct.latest_session
+    saved = app_module.ct.active_session
     try:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             path = _fake_transcript(Path(tmp))
-            app_module.ct.latest_session = lambda *a, **k: path
+            app_module.ct.active_session = lambda *a, **k: path
             before = len(_claude_threads())
             with temp_app() as application:
                 application.set_claude_watch(True)
@@ -502,7 +502,7 @@ def test_toggling_the_claude_watch_never_leaves_two_readers():
                 application.set_claude_watch(False)
                 assert len(_claude_threads()) == before, "watcher did not stop"
     finally:
-        app_module.ct.latest_session = saved
+        app_module.ct.active_session = saved
 
 
 def test_shutdown_waits_for_a_watcher_that_is_mid_read():
@@ -517,12 +517,12 @@ def test_shutdown_waits_for_a_watcher_that_is_mid_read():
     So the watcher is held inside a read when shutdown is called. Without the
     join, shutdown returns while it is still in there.
     """
-    saved = app_module.ct.latest_session
+    saved = app_module.ct.active_session
     entered = threading.Event()
     try:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             path = _fake_transcript(Path(tmp))
-            app_module.ct.latest_session = lambda *a, **k: path
+            app_module.ct.active_session = lambda *a, **k: path
             before = len(_claude_threads())
             with temp_app() as application:
                 def slow_read(*_args, **_kwargs):
@@ -540,7 +540,7 @@ def test_shutdown_waits_for_a_watcher_that_is_mid_read():
                 "shutdown returned with the watcher still inside a read, so the"
                 " database and audio device were closed underneath it")
     finally:
-        app_module.ct.latest_session = saved
+        app_module.ct.active_session = saved
 
 
 
@@ -552,12 +552,12 @@ def test_replies_arriving_together_are_read_as_one_document():
     second meant the first was cut off part-way through a sentence and the
     second began, with nothing to say a reply had been skipped.
     """
-    saved = app_module.ct.latest_session
+    saved = app_module.ct.active_session
     read_texts = []
     try:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             path = _fake_transcript(Path(tmp))
-            app_module.ct.latest_session = lambda *a, **k: path
+            app_module.ct.active_session = lambda *a, **k: path
             with temp_app() as application:
                 application.read = (
                     lambda doc, **kw: read_texts.append(doc.text))
@@ -572,7 +572,7 @@ def test_replies_arriving_together_are_read_as_one_document():
                 time.sleep(1.5)
                 application.set_claude_watch(False)
     finally:
-        app_module.ct.latest_session = saved
+        app_module.ct.active_session = saved
 
     assert len(read_texts) == 1, (
         str(len(read_texts)) + " separate reads, so all but the last were cut off")
@@ -635,9 +635,9 @@ def test_the_watcher_moves_to_whichever_conversation_you_are_in():
         first.write_text(_reply_line("The first conversation."), encoding="utf-8")
         os.utime(first, (1000, 1000))
 
-        saved = app_module.ct.latest_session
+        saved = app_module.ct.active_session
         newest = {"path": first}
-        app_module.ct.latest_session = lambda *a, **k: newest["path"]
+        app_module.ct.active_session = lambda *a, **k: newest["path"]
         try:
             with temp_app() as application:
                 heard: list[str] = []
@@ -677,7 +677,7 @@ def test_the_watcher_moves_to_whichever_conversation_you_are_in():
                 assert not any("Opening the second" in h for h in heard), heard
                 application.set_claude_watch(False)
         finally:
-            app_module.ct.latest_session = saved
+            app_module.ct.active_session = saved
 
 
 def test_a_setting_nobody_answered_follows_the_default():
@@ -708,6 +708,81 @@ def test_a_setting_nobody_answered_follows_the_default():
             assert Config.load().claude_watch is True
         finally:
             config_module.data_dir = saved
+
+
+def test_a_claude_reply_arrives_as_sentences_a_person_would_say():
+    """The whole chain, on the shape a real reply actually has.
+
+    Every earlier test here covers one link. This is the only one that starts
+    at a transcript being appended to and ends at the sentences the voice is
+    handed, which is where the markdown, the table and the code fence either
+    survive as punctuation or turn into speech.
+    """
+    from executive_reader.capture import claude_transcript as ct
+
+    nl = chr(10)
+    reply = nl.join([
+        "Both parts are done. Here is what changed.",
+        "",
+        "## What the numbers say",
+        "",
+        "| route | words recovered |",
+        "|---|---|",
+        "| before | 0 of 4 |",
+        "| after | 4 of 4 |",
+        "",
+        "Run it yourself:",
+        "",
+        "```powershell",
+        "npm test --prefix extension",
+        "```",
+        "",
+        "- the outline stays up",
+        "- the marker follows the voice",
+        "",
+        "Pushed as `19c9c77`.",
+    ])
+
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        root = Path(tmp)
+        folder = root / "proj"
+        folder.mkdir()
+        ct.forget_sessions()
+        path = folder / "live.jsonl"
+        path.write_text(_reply_line("Earlier reply."), encoding="utf-8")
+
+        with temp_app() as application:
+            application.config.claude_projects_dir = str(root)
+            application.config.claude_session = str(path)
+            application.set_claude_watch(True)
+            assert _wait_for(lambda: application._claude_tail is not None)
+
+            _append_reply(path, reply)
+            assert _wait_for(lambda: application.reader.segments), \
+                "the reply was never picked up"
+            spoken = list(application.reader.segments)
+            application.set_claude_watch(False)
+
+    said = " ".join(spoken)
+    # Markdown is not read as punctuation.
+    assert "|" not in said, spoken
+    assert "##" not in said and "**" not in said and "`" not in said, spoken
+
+    # The table is a list of rows, with its header said once.
+    assert "Table: route, words recovered." in spoken, spoken
+    assert "before, 0 of 4." in spoken, spoken
+
+    # The code is announced, not read and not silently dropped.
+    assert any("PowerShell code block" in s for s in spoken), spoken
+    assert "npm" not in said, spoken
+
+    # The list is three separate things, not one breathless line.
+    assert "the outline stays up." in spoken, spoken
+    assert "the marker follows the voice." in spoken, spoken
+
+    # And the first segment is short, so speech starts without a long wait.
+    assert len(spoken[0]) <= 110, (len(spoken[0]), spoken[0])
+    assert spoken[0].startswith("Both parts are done"), spoken[0]
 
 
 if __name__ == "__main__":

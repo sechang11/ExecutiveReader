@@ -44,6 +44,12 @@ function reachable() {
     const specs = [
       ...[...src.matchAll(/from\s+'(\.[^']+)'/g)].map((m) => m[1]),
       ...[...src.matchAll(/import\(\s*'(\.[^']+)'\s*\)/g)].map((m) => m[1]),
+      // A template literal, up to the first interpolation or query string.
+      // Two modules are imported that way and for the same reason: they install
+      // listeners at load, so each case must have a fresh instance, which means
+      // a cache-busting suffix. The scan reported both as unreachable, and the
+      // list grew an excuse each time rather than the scan growing an eye.
+      ...[...src.matchAll(/import\(\s*`(\.[^`?$]+)/g)].map((m) => m[1]),
     ];
     for (const s of specs) visit(path.normalize(path.join(path.dirname(file), s)));
   };
@@ -57,8 +63,18 @@ function reachable() {
  * deleting the line.
  */
 const KNOWN_UNREACHED = {
-  'src/background/index.js': 'orchestration over chrome.tabs, storage.session and messaging',
-  'src/background/offscreen-host.js': 'chrome.offscreen lifecycle',
+  // Three entries left this list at once, and only one of them by being
+  // tested. background/index.js is now driven directly by
+  // test/background.test.mjs against a stand-in for the chrome APIs; the reason
+  // that used to sit here — "orchestration over chrome.tabs, storage.session
+  // and messaging" — described the obstacle rather than giving a reason, and
+  // the obstacle was a hundred lines of fixture.
+  //
+  // offscreen-host.js and pdf/extract.js followed it out because the worker
+  // imports them, so the scan now sees them. Reached is not exercised: what
+  // actually runs of them is closeOffscreen on a stop and looksLikePdf on a
+  // URL that is not one. KNOWN_UNEXERCISED below is the finer measure, and
+  // this list has never claimed to be it.
   'src/content/index.js': 'live DOM, ranges and chrome messaging',
   'src/content/loader.js': 'four lines of dynamic import into a page context',
   'src/content/highlight.js': 'CSS Custom Highlight API, which has no Node equivalent; covered by tools/domtest/',
@@ -81,7 +97,6 @@ const KNOWN_UNREACHED = {
 
   'src/offscreen/offscreen.js': 'message wiring between the worker and the audio graph',
   'src/options/options.js': 'settings page DOM',
-  'src/pdf/extract.js': 'drives PDF.js against a real document',
   'src/pdf/viewer.js': 'viewer page DOM',
   'src/popup/popup.js': 'popup DOM',
   'src/sidepanel/panel.js': 'side panel DOM',

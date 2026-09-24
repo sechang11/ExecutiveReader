@@ -61,12 +61,104 @@ def test_headings_get_a_terminator():
     assert out[0] == "Avoid em units.", out
 
 
-def test_code_blocks_can_be_skipped():
-    src = "Before.\n\n```\nprint(1)\n```\n\nAfter."
-    kept = normalize(src, skip_code=False)
-    skipped = normalize(src, skip_code=True)
-    assert "print" not in kept and "print" not in skipped
-    assert "Code block" in skipped and "Code block" not in kept
+def test_a_code_block_is_announced_rather_than_deleted_in_silence():
+    """The two settings were the wrong way round.
+
+    shared/normalization.json has said "announce: say 'code block, twelve
+    lines' and skip" since the rules were written. The desktop said "Code
+    block." when told to *skip* one, and said nothing at all otherwise, so
+    the default deleted code without a word and the setting named skip was
+    the only way to be told it existed. Someone listening to an answer full
+    of commands was never told there were any.
+
+    The count is what makes the announcement worth hearing: two lines is a
+    command you may want to look at, ninety is a file that you do not.
+    """
+    nl = chr(10)
+    src = ("Before." + nl * 2 + "```powershell" + nl + "npm test" + nl
+           + "```" + nl * 2 + "After.")
+
+    spoken = normalize(src)
+    assert "npm test" not in spoken, "the code itself was read out"
+    assert "PowerShell code block, 1 line" in spoken, spoken
+    assert "Before." in spoken and "After." in spoken
+
+    # Ticking "skip code blocks" leaves it out entirely, which is what the
+    # words on the checkbox say.
+    silent = normalize(src, skip_code=True)
+    assert "code block" not in silent.lower(), silent
+    assert "npm test" not in silent
+
+    # A fence with no language still says how long it is.
+    bare = normalize("A." + nl * 2 + "```" + nl + "one" + nl + "two" + nl + "```")
+    assert "Code block, 2 lines" in bare, bare
+
+
+def test_the_code_block_policy_comes_from_the_shared_rules():
+    """Not from a boolean invented on this side.
+
+    shared/normalization.json owns the three modes and says which one is in
+    force. Both halves had ignored it: the desktop had its own boolean and
+    the extension has nothing at all. This half now reads the rule, so if the
+    shared answer changes, changing it is enough.
+
+    The extension reaches the same text through the DOM rather than through
+    markdown, so there is no normalize output to compare the two halves on
+    and no harness stage that can see this. That is exactly the blind spot
+    the footnote-marker note in tools/conformance.mjs describes, and it is
+    why this assertion is here instead of there.
+    """
+    from executive_reader.textproc import normalize as norm
+    from executive_reader.textproc import shared_rules
+
+    shared = (shared_rules.load("normalization").get("code_blocks") or {})
+    assert shared.get("mode") in norm._CODE_MODES, (
+        "shared/normalization.json names a code_blocks mode this half does "
+        "not implement: " + repr(shared.get("mode")))
+    assert norm.code_mode() == shared["mode"], (
+        "the shared rule says " + repr(shared["mode"])
+        + " and this half does " + repr(norm.code_mode()))
+    # Whatever it says, ticking the setting still means skip.
+    assert norm.code_mode(True) == "skip"
+
+
+def test_language_tags_are_spoken_as_their_names():
+    """Capitalising the tag gives "Powershell" and "Json", which are not
+    words and are not pronounced like the things they name."""
+    nl = chr(10)
+
+    def announced(tag):
+        return normalize("A." + nl * 2 + "```" + tag + nl + "x" + nl + "```")
+
+    assert "PowerShell code block" in announced("powershell")
+    assert "JSON code block" in announced("json")
+    assert "TypeScript code block" in announced("ts")
+    assert "Shell code block" in announced("bash")
+    # Something unheard of still says what it was tagged.
+    assert "Brainfuck code block" in announced("brainfuck")
+
+
+def test_a_table_is_read_as_rows_rather_than_as_its_drawing():
+    """Claude's answers are full of tables, and one arrived at the voice as
+    its own picture: every row beginning and ending with a vertical bar and
+    the cells running together with no pause between them."""
+    nl = chr(10)
+    table = nl.join(["Here it is.", "",
+                     "| route | words recovered |",
+                     "|---|---|",
+                     "| before | 0 of 4 |",
+                     "| after | 4 of 4 |", "",
+                     "That is the fix."])
+    spoken = normalize(table)
+    assert "|" not in spoken, spoken
+    assert "Table: route, words recovered." in spoken, spoken
+    assert "before, 0 of 4." in spoken, spoken
+    assert "after, 4 of 4." in spoken, spoken
+    assert "That is the fix." in spoken
+
+    # A vertical bar in prose is not a table, and must not be eaten.
+    piped = normalize("Run ls | sort to see them in order.")
+    assert "sort" in piped, piped
 
 
 def test_urls_read_as_domains_by_default():

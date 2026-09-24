@@ -198,9 +198,47 @@ const KNOWN = new Map([
     },
   }],
 
+  // The desktop half now says a table instead of reading its drawing. It
+  // reached the voice as a picture before: every row opening and closing with
+  // a vertical bar and the cells running together with no pause, which is a
+  // large part of how an answer full of tables sounded. Rows are lists, so
+  // they are read as lists, and the header is said once so the rows mean
+  // something.
+  //
+  // Structural rather than a migration, and in the same group as the newline
+  // divergences above for the same reason: nothing reaches the extension's
+  // segmenter as markdown. A table on a page is a table element, and whatever
+  // should happen to it happens in extractBlocks where the structure still
+  // exists, not in a text splitter that would have to guess it back.
   ['markdown table', {
-    python: ['| Path | Size |', '| vendor/pdfjs | 1.7 MB |', 'After the table.'],
+    python: ['Table: Path, Size.', 'vendor/pdfjs, 1.7 MB.', 'After the table.'],
     js: ['| Path | Size |\n|---|---|\n| vendor/pdfjs | 1.7 MB |\n\nAfter the table.'],
+  }],
+
+  // --- latency --------------------------------------------------------------
+  // A migration, not a decision: the extension owes the same change.
+  //
+  // Nothing is heard until the first segment has been synthesized, and
+  // synthesis costs roughly a fixed second and a half plus a little per
+  // character. So the opening sentence alone decides how long the silence is
+  // before a reply starts. Measured on a real reply: a 137-character opening
+  // took 6.34 seconds before a word came out, and cutting only that first
+  // segment to 71 characters took 3.40. The remainder is rendered while the
+  // voice speaks, which is time that was going to be spent anyway.
+  //
+  // The extension has exactly the same problem -- it runs the same model in a
+  // worker -- so this belongs in both halves rather than in the desktop's
+  // player, and it is written here rather than hidden in Reader.load() so
+  // that it is visible to this harness while the two disagree.
+  ['long sentence is split for latency', {
+    python: [
+      'This clause carries the sentence forward, and this one extends it further still,',
+      'and a third keeps going well past the point where any engine would rather start speaking,',
+      'and a fourth finally ends it so the splitter has somewhere sensible to cut before the limit is reached.',
+    ],
+    js: [
+      'This clause carries the sentence forward, and this one extends it further still, and a third keeps going well past the point where any engine would rather start speaking, and a fourth finally ends it so the splitter has somewhere sensible to cut before the limit is reached.',
+    ],
   }],
 
   // --- normalising, not splitting -------------------------------------------

@@ -86,6 +86,24 @@ class Registry:
         except EngineError:
             return set()
 
+    def warm(self, engine: str, voice: str) -> None:
+        """Get the voice ready before anything needs it.
+
+        A separate name rather than a short synthesize, because it is a
+        different intention and the difference is observable: a stub registry
+        keeps a record of everything it was asked to say, and a warm-up
+        arriving through the same door put a word nobody asked for at the top
+        of that record.
+
+        Failure is ignored here on purpose. Whatever is wrong will be wrong
+        again when there is something real to say, and reported then, next to
+        the thing the person was actually waiting for.
+        """
+        try:
+            self.synthesize("Ready.", engine, voice, 1.0)
+        except Exception:
+            pass
+
     def synthesize(self, text: str, engine: str, voice: str,
                    speed: float) -> tuple[np.ndarray, int]:
         """Synthesize, taking any speed the voice cannot manage out of the audio.
