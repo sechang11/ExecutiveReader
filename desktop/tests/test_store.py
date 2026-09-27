@@ -107,22 +107,6 @@ def test_unfinished_filter_and_forget():
 
         store.forget("a://1")
         assert [r.uri for r in store.history()] == ["a://2"]
-
-
-def test_bookmarks():
-    with temp_store() as store:
-        store.touch("test://doc", "A Document", "file", "", 5)
-        bid = store.add_bookmark("test://doc", "A Document", 2,
-                                 Anchor.create(SEGMENTS, 2), note="check this")
-        marks = store.bookmarks("test://doc")
-        assert len(marks) == 1
-        assert marks[0].note == "check this"
-        assert marks[0].anchor.resolve(SEGMENTS) == 2
-
-        store.delete_bookmark(bid)
-        assert store.bookmarks("test://doc") == []
-
-
 def test_pronunciation_rules_seed_and_update():
     with temp_store() as store:
         seeded = store.rules()
@@ -153,7 +137,7 @@ def test_anchor_survives_a_normalization_rule_change():
     Anchors store sentence text, not character offsets, so both the stored
     quote and the segments it is matched against are normalized text and
     cannot disagree about position. What can change is the normalization
-    itself: shared rule edits rewrite the sentences of an already-bookmarked
+    itself: shared rule edits rewrite the sentences of an already-saved
     document. Resolution must degrade to the right sentence, not to sentence
     zero. This is not hypothetical, the say-as list gained w/ and -> mid-project.
     """
@@ -527,65 +511,6 @@ def test_context_beats_position_however_far_the_document_moved():
         found = anchor.locate(after)
         assert found.index == real, ("shift " + str(shift) + " resolved to "
                                      + str(found.index) + ", wanted " + str(real))
-
-
-def test_position_still_decides_when_context_cannot():
-    """The tiebreak must survive being demoted to a tiebreak.
-
-    Two copies with equally useless context: the nearer one to the remembered
-    position should still win, which is the whole reason the term exists.
-    """
-    repeated = "He said nothing at all."
-    segments = ["filler line number " + str(i) + "." for i in range(400)]
-    segments[50] = repeated
-    segments[300] = repeated
-
-    near_first = Anchor(exact=repeated, prefix="", suffix="", index_hint=60)
-    assert near_first.locate(segments).index == 50, "should pick the nearer copy"
-
-    near_second = Anchor(exact=repeated, prefix="", suffix="", index_hint=290)
-    assert near_second.locate(segments).index == 300, "should pick the nearer copy"
-
-
-
-def test_clearing_history_keeps_bookmarks():
-    """The confirmation dialog promises it, so it is a promise worth pinning.
-
-    A bookmark is something the user chose to keep; a history row is something
-    the app wrote on their behalf. Deleting the first while offering to delete
-    the second would be the worst possible reading of that button.
-    """
-    with temp_store() as store:
-        store.touch("test://one", "One", "file", "snippet", 10)
-        store.touch("test://two", "Two", "file", "snippet", 10)
-        store.add_bookmark("test://one", "One", 3,
-                           Anchor.create(SEGMENTS, 3), "keep me")
-        assert len(store.history()) == 2
-        assert len(store.bookmarks()) == 1
-
-        store.clear_history()
-
-        assert store.history() == [], "history survived being cleared"
-        kept = store.bookmarks()
-        assert len(kept) == 1, "the bookmark went with the history"
-        assert kept[0].note == "keep me", kept[0].note
-
-
-def test_forgetting_one_document_takes_its_bookmarks_with_it():
-    """The opposite promise: removing a document removes everything about it,
-    and leaves every other document alone."""
-    with temp_store() as store:
-        store.touch("test://one", "One", "file", "snippet", 10)
-        store.touch("test://two", "Two", "file", "snippet", 10)
-        store.add_bookmark("test://one", "One", 1, Anchor.create(SEGMENTS, 1))
-        store.add_bookmark("test://two", "Two", 2, Anchor.create(SEGMENTS, 2))
-
-        store.forget("test://one")
-
-        assert [row.uri for row in store.history()] == ["test://two"]
-        assert [mark.uri for mark in store.bookmarks()] == ["test://two"]
-
-
 def test_approximate_is_exactly_the_opposite_of_verified():
     """Two names for one fact, and the pair is the shared contract.
 

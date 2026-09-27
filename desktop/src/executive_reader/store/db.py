@@ -1,4 +1,9 @@
-"""History, bookmarks, pronunciation rules and per-source settings.
+"""History, pronunciation rules and per-source settings.
+
+Bookmarks used to live here too. Three hundred and eighty five readings in,
+the table held nothing, so the table, its index, its row type and the three
+methods that touched it are gone. An existing database keeps its empty table;
+nothing reads it. Resuming where you stopped is separate and untouched.
 
 One SQLite file under %APPDATA%/Executive Reader. Everything stays on this machine.
 """
@@ -32,17 +37,6 @@ CREATE TABLE IF NOT EXISTS history (
     last_read     REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS history_recent ON history(last_read DESC);
-
-CREATE TABLE IF NOT EXISTS bookmarks (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    uri      TEXT NOT NULL,
-    title    TEXT NOT NULL DEFAULT '',
-    note     TEXT NOT NULL DEFAULT '',
-    anchor   TEXT NOT NULL DEFAULT '',
-    seg_index INTEGER NOT NULL DEFAULT 0,
-    created  REAL NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS bookmarks_uri ON bookmarks(uri, created DESC);
 
 CREATE TABLE IF NOT EXISTS pronunciations (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,20 +77,6 @@ class HistoryRow:
         return (self.last_index / self.total) if self.total else 0.0
 
 
-@dataclass
-class BookmarkRow:
-    id: int
-    uri: str
-    title: str
-    note: str
-    seg_index: int
-    created: float
-    anchor: Anchor
-    #: The shared rules were edited after this bookmark was saved, so its
-    #: quoted sentence may have been rewritten since.
-    rules_changed: bool = False
-
-
 _PREVIOUS_DB = "aloud.db"
 
 
@@ -104,8 +84,8 @@ def default_db_path() -> Path:
     """The database, carried across from the previous product name.
 
     Renaming the folder is not enough on its own: the file inside it is named
-    too, and leaving that behind orphans an existing history and bookmarks
-    while the app silently starts a fresh, empty one.
+    too, and leaving that behind orphans an existing history while the app
+    silently starts a fresh, empty one.
     """
     current = data_dir() / "earmark.db"
     if not current.exists():
@@ -133,13 +113,12 @@ class Store:
     def _migrate(self) -> None:
         """Add columns introduced after a database was first created."""
         with self._lock:
-            for table in ("history", "bookmarks"):
-                columns = {row["name"] for row in
-                           self._conn.execute("PRAGMA table_info(" + table + ")")}
-                if "rules_stamp" not in columns:
-                    self._conn.execute(
-                        "ALTER TABLE " + table +
-                        " ADD COLUMN rules_stamp TEXT NOT NULL DEFAULT ''")
+            columns = {row["name"] for row in
+                       self._conn.execute("PRAGMA table_info(history)")}
+            if "rules_stamp" not in columns:
+                self._conn.execute(
+                    "ALTER TABLE history"
+                    " ADD COLUMN rules_stamp TEXT NOT NULL DEFAULT ''")
             self._conn.commit()
 
     def close(self) -> None:
@@ -212,53 +191,11 @@ class Store:
     def forget(self, uri: str) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM history WHERE uri=?", (uri,))
-            self._conn.execute("DELETE FROM bookmarks WHERE uri=?", (uri,))
             self._conn.commit()
 
     def clear_history(self) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM history")
-            self._conn.commit()
-
-    # --- bookmarks -------------------------------------------------------
-    def add_bookmark(self, uri: str, title: str, index: int, anchor: Anchor,
-                     note: str = "") -> int:
-        with self._lock:
-            cur = self._conn.execute(
-                "INSERT INTO bookmarks"
-                " (uri,title,note,anchor,seg_index,created,rules_stamp)"
-                " VALUES (?,?,?,?,?,?,?)",
-                (uri, title, note, json.dumps(anchor.to_dict()), index,
-                 time.time(), shared_rules.fingerprint()))
-            self._conn.commit()
-            return int(cur.lastrowid)
-
-    def bookmarks(self, uri: str | None = None, limit: int = 200) -> list[BookmarkRow]:
-        if uri:
-            sql, args = ("SELECT * FROM bookmarks WHERE uri=? ORDER BY created DESC"
-                         " LIMIT ?", (uri, limit))
-        else:
-            sql, args = "SELECT * FROM bookmarks ORDER BY created DESC LIMIT ?", (limit,)
-        with self._lock:
-            rows = self._conn.execute(sql, args).fetchall()
-        out = []
-        for r in rows:
-            try:
-                anchor = Anchor.from_dict(json.loads(r["anchor"] or "{}"))
-            except (json.JSONDecodeError, TypeError):
-                anchor = Anchor(exact="")
-            stored = (r["rules_stamp"] or "") if "rules_stamp" in r.keys() else ""
-            current = shared_rules.fingerprint()
-            out.append(BookmarkRow(id=int(r["id"]), uri=r["uri"], title=r["title"],
-                                   note=r["note"], seg_index=int(r["seg_index"] or 0),
-                                   created=float(r["created"] or 0), anchor=anchor,
-                                   rules_changed=bool(stored and current
-                                                      and stored != current)))
-        return out
-
-    def delete_bookmark(self, bookmark_id: int) -> None:
-        with self._lock:
-            self._conn.execute("DELETE FROM bookmarks WHERE id=?", (bookmark_id,))
             self._conn.commit()
 
     # --- pronunciation ---------------------------------------------------

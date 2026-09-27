@@ -299,13 +299,13 @@ class App:
             return
         self.read(doc)
 
-    def read_screen(self, scrolled: bool = False) -> None:
+    def read_screen(self) -> None:
         if not ocr.available():
             self.on_error("Screen OCR needs mss, Pillow and winocr.")
             return
         self.on_status("Reading the screen...")
         try:
-            doc = ocr.scroll_and_stitch() if scrolled else ocr.capture()
+            doc = ocr.capture()
         except ocr.OCRUnavailable as exc:
             self.on_error(str(exc))
             return
@@ -635,32 +635,6 @@ class App:
         self.reader.set_voice(engine, voice)
         self.config.save()
         self.on_status("Voice: " + (voice or engine))
-
-    def bookmark(self, note: str = "") -> int | None:
-        if self._doc is None or not self.reader.segments:
-            self.on_error("Nothing is being read.")
-            return None
-        index = self.reader.index
-        anchor = Anchor.create(self.reader.segments, index)
-        bid = self.store.add_bookmark(self._doc.uri, self._doc.title, index,
-                                      anchor, note)
-        self.on_status("Bookmarked sentence " + str(index + 1) + ".")
-        return bid
-
-    def resume_bookmark(self, bookmark_id: int) -> None:
-        for mark in self.store.bookmarks():
-            if mark.id != bookmark_id:
-                continue
-            if self._doc is not None and self._doc.uri == mark.uri:
-                found = mark.anchor.locate(self.reader.segments,
-                                           mark.rules_changed)
-                self.reader.seek(found.index)
-                # Same wording as resuming, because it is the same situation.
-                self.on_status("Jumped to the bookmark."
-                               + position_note(found, mark.rules_changed))
-                return
-            self.on_error("Open " + mark.title + " first, then resume it.")
-            return
 
     def set_sleep_timer(self, minutes: int) -> None:
         if self._sleep_timer is not None:

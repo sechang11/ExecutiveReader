@@ -1,4 +1,11 @@
-"""History, bookmarks, voices, pronunciation and settings."""
+"""History, voices and settings.
+
+Two tabs were removed after three hundred and eighty five readings, because
+the record showed nobody had ever used either. Bookmarks held nothing at all,
+and the pronunciation editor had only the rules that shipped with the app --
+which do their job, and stay; it was the screen for editing them that nobody
+opened. Resuming where you stopped is a different thing and is still here.
+"""
 from __future__ import annotations
 
 import time
@@ -54,9 +61,7 @@ class Library(QMainWindow):
         self.screen.status.connect(lambda message: app.on_status(message))
         tabs.addTab(self.screen, "Anything else")
         tabs.addTab(self._history_tab(), "History")
-        tabs.addTab(self._bookmarks_tab(), "Bookmarks")
         tabs.addTab(self._voices_tab(), "Voices")
-        tabs.addTab(self._words_tab(), "Pronunciation")
         tabs.addTab(self._settings_tab(), "Settings")
         tabs.currentChanged.connect(lambda _i: self.refresh())
         self.setCentralWidget(tabs)
@@ -122,45 +127,6 @@ class Library(QMainWindow):
             "Delete every history entry? Bookmarks are kept.")
         if confirm == QMessageBox.Yes:
             self.app.store.clear_history()
-            self.refresh()
-
-    # --- bookmarks -------------------------------------------------------
-    def _bookmarks_tab(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        self.bookmark_table = QTableWidget(0, 4)
-        self.bookmark_table.setHorizontalHeaderLabels(
-            ["Sentence", "Document", "Note", "Saved"])
-        self._tune(self.bookmark_table)
-        layout.addWidget(self.bookmark_table)
-
-        row = QHBoxLayout()
-        row.addStretch(1)
-        delete = QPushButton("Delete selected")
-        delete.clicked.connect(self._delete_bookmark)
-        row.addWidget(delete)
-        layout.addLayout(row)
-        return page
-
-    def _refresh_bookmarks(self) -> None:
-        marks = self.app.store.bookmarks()
-        self.bookmark_table.setRowCount(len(marks))
-        for i, mark in enumerate(marks):
-            cells = [mark.anchor.exact[:90], mark.title, mark.note,
-                     _ago(mark.created)]
-            for col, value in enumerate(cells):
-                item = QTableWidgetItem(value)
-                if col == 0:
-                    item.setData(Qt.UserRole, mark.id)
-                self.bookmark_table.setItem(i, col, item)
-
-    def _delete_bookmark(self) -> None:
-        row = self.bookmark_table.currentRow()
-        if row < 0:
-            return
-        item = self.bookmark_table.item(row, 0)
-        if item is not None:
-            self.app.store.delete_bookmark(int(item.data(Qt.UserRole)))
             self.refresh()
 
     # --- voices ----------------------------------------------------------
@@ -339,64 +305,6 @@ class Library(QMainWindow):
                                 "Kokoro voices installed. Pick one above.")
         self.refresh()
 
-    # --- pronunciation ---------------------------------------------------
-    def _words_tab(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.addWidget(QLabel(
-            "Override how particular words are said. This is the cheapest way "
-            "to fix names, acronyms and jargon."))
-
-        self.rules_table = QTableWidget(0, 2)
-        self.rules_table.setHorizontalHeaderLabels(["Written", "Spoken as"])
-        self._tune(self.rules_table)
-        self.rules_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        layout.addWidget(self.rules_table)
-
-        row = QHBoxLayout()
-        self.rule_pattern = QLineEdit()
-        self.rule_pattern.setPlaceholderText("Written, e.g. nginx")
-        self.rule_value = QLineEdit()
-        self.rule_value.setPlaceholderText("Spoken as, e.g. engine ex")
-        row.addWidget(self.rule_pattern)
-        row.addWidget(self.rule_value, 1)
-        add = QPushButton("Add")
-        add.clicked.connect(self._add_rule)
-        row.addWidget(add)
-        remove = QPushButton("Remove selected")
-        remove.clicked.connect(self._remove_rule)
-        row.addWidget(remove)
-        layout.addLayout(row)
-        return page
-
-    def _refresh_rules(self) -> None:
-        rules = sorted(self.app.store.rules(), key=lambda r: r.pattern.lower())
-        self.rules_table.setRowCount(len(rules))
-        for i, rule in enumerate(rules):
-            self.rules_table.setItem(i, 0, QTableWidgetItem(rule.pattern))
-            self.rules_table.setItem(i, 1, QTableWidgetItem(rule.replacement))
-
-    def _add_rule(self) -> None:
-        pattern = self.rule_pattern.text().strip()
-        if not pattern:
-            return
-        self.app.store.upsert_rule(Rule(pattern=pattern,
-                                        replacement=self.rule_value.text().strip()))
-        self.app.reload_dictionary()
-        self.rule_pattern.clear()
-        self.rule_value.clear()
-        self.refresh()
-
-    def _remove_rule(self) -> None:
-        row = self.rules_table.currentRow()
-        if row < 0:
-            return
-        item = self.rules_table.item(row, 0)
-        if item is not None:
-            self.app.store.delete_rule(item.text())
-            self.app.reload_dictionary()
-            self.refresh()
-
     # --- settings --------------------------------------------------------
     def _settings_tab(self) -> QWidget:
         page = QWidget()
@@ -511,9 +419,7 @@ class Library(QMainWindow):
     # --- shared ----------------------------------------------------------
     def refresh(self) -> None:
         self._refresh_history()
-        self._refresh_bookmarks()
         self._refresh_voices()
-        self._refresh_rules()
         self.speed_box.blockSignals(True)
         self.speed_box.setValue(self.app.config.speed)
         self.speed_box.blockSignals(False)

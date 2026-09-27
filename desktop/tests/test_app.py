@@ -1,4 +1,4 @@
-"""The orchestration layer: capture, read, resume, transport, bookmark.
+"""The orchestration layer: capture, read, resume and transport.
 
 A call trace showed the whole public surface of app.py was never invoked by any
 test. Every piece underneath it was covered, which is the least useful place for
@@ -237,34 +237,6 @@ def test_toggle_alternates_play_and_pause():
         assert _wait(lambda: app.reader.state == "paused")
         app.toggle()
         assert _wait(lambda: app.reader.state == "playing")
-
-
-# --- bookmarks -----------------------------------------------------------
-
-def test_bookmarking_stores_the_sentence_and_resumes_to_it():
-    with temp_app() as app:
-        app.read(DOC)
-        assert _wait(lambda: app.reader.total == 4)
-        app.reader.pause()
-        app.reader.seek(2, keep_playing=False)
-
-        bookmark_id = app.bookmark("check this")
-        assert bookmark_id is not None
-        marks = app.store.bookmarks("test://doc")
-        assert len(marks) == 1 and marks[0].note == "check this"
-        assert marks[0].anchor.exact == "Third sentence here."
-
-        app.reader.seek(0, keep_playing=False)
-        app.resume_bookmark(bookmark_id)
-        assert _wait(lambda: app.reader.index == 2), app.reader.index
-
-
-def test_bookmarking_nothing_reports_rather_than_crashing():
-    with temp_app() as app:
-        errors: list[str] = []
-        app.on_error = errors.append
-        assert app.bookmark() is None
-        assert errors, "silently doing nothing is worse than saying so"
 
 
 # --- capture entry points ------------------------------------------------

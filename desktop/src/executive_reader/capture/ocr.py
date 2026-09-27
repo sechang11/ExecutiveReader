@@ -5,8 +5,12 @@ canvas, video frames, games and locked-down viewers. It reads pixels, so it
 sees only what is on screen. That is the limitation the other rungs of the
 ladder exist to avoid.
 
-scroll_and_stitch works around it for scrollable content by capturing,
-scrolling, capturing again and dropping the overlap.
+It used to offer a scrolling mode as well: capture, turn the wheel, capture
+again, drop the overlap. It was removed after three hundred and eighty five
+readings had produced not one use of it. It was the least reliable route in
+the application by its own description, it moved the mouse wheel over
+whatever happened to be under the pointer, and the only way to reach it was a
+tray entry beside four others.
 """
 from __future__ import annotations
 
@@ -112,65 +116,3 @@ def capture(region: tuple[int, int, int, int] | None = None) -> Document | None:
         return None
     return Document(text=text, title="Screen", source="ocr",
                     meta={"region": region})
-
-
-def _dedupe(previous: str, current: str) -> str:
-    """Drop lines of current that already appeared at the tail of previous.
-
-    Consecutive screenshots overlap, so without this every scroll step would
-    repeat several lines.
-    """
-    if not previous:
-        return current
-    prev_lines = [ln.strip() for ln in previous.splitlines() if ln.strip()]
-    cur_lines = [ln.strip() for ln in current.splitlines() if ln.strip()]
-    if not prev_lines or not cur_lines:
-        return current
-    tail = prev_lines[-12:]
-    # Find the longest run of leading current-lines already present in the tail.
-    cut = 0
-    for i in range(min(len(cur_lines), len(tail)), 0, -1):
-        if cur_lines[:i] == tail[-i:]:
-            cut = i
-            break
-    if cut == 0:
-        seen = set(tail)
-        while cut < len(cur_lines) and cur_lines[cut] in seen:
-            cut += 1
-    return "\n".join(cur_lines[cut:])
-
-
-def scroll_and_stitch(pages: int = 8, pause: float = 0.45,
-                      clicks: int = 6,
-                      region: tuple[int, int, int, int] | None = None) -> Document | None:
-    """Capture, scroll, repeat, then join the results.
-
-    For image-only content that does not fit on one screen. Slower and less
-    reliable than every other capture route, so it is never the default.
-    """
-    try:
-        import win32api
-        import win32con
-    except ImportError as exc:
-        raise OCRUnavailable("pywin32 is required for scrolling capture.") from exc
-
-    collected: list[str] = []
-    previous = ""
-    for step in range(max(1, pages)):
-        chunk = _recognize(_grab(region)).strip()
-        fresh = _dedupe(previous, chunk)
-        if step > 0 and not fresh.strip():
-            break  # nothing new appeared; we have reached the end
-        if fresh.strip():
-            collected.append(fresh)
-        previous = chunk
-        for _ in range(clicks):
-            win32api.mouse_event(win32con.MOUSEEVENTF_WHEEL, 0, 0, -120, 0)
-            time.sleep(0.02)
-        time.sleep(pause)
-
-    text = "\n".join(collected).strip()
-    if len(text) < _MIN_CHARS:
-        return None
-    return Document(text=text, title="Screen (scrolled)", source="ocr",
-                    meta={"region": region, "steps": len(collected)})

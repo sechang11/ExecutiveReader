@@ -98,13 +98,22 @@ def test_the_tray_app_builds_and_shuts_down_cleanly():
         try:
             assert tray.tray.isVisible()
             actions = tray.tray.contextMenu().actions()
-            assert len(actions) >= 10, len(actions)
+            # The tray is what you reach for without opening a window, so it
+            # holds only what has no other home. Five ways of reading, two
+            # window-watch modes and a bookmark left it; each of those has a
+            # shortcut, a button, or in the bookmark's case no users at all.
+            assert 7 <= len(actions) <= 12, len(actions)
             # Every menu entry must be wired to something.
             for action in actions:
                 if not action.isSeparator():
                     assert action.text(), "a menu entry has no label"
             tabs = tray.library.centralWidget()
-            assert tabs.count() == 7, "seven tabs expected"
+            # Five. Bookmarks held nothing after 385 readings and the
+            # pronunciation editor was never opened; both are gone, and the
+            # rules they edited still run.
+            assert tabs.count() == 5, [tabs.tabText(i) for i in range(tabs.count())]
+            assert [tabs.tabText(i) for i in range(tabs.count())] == [
+                "Claude", "Anything else", "History", "Voices", "Settings"]
             # Claude first: it is the job the app exists for and the one
             # route that needs nothing chosen or recognised.
             assert tabs.tabText(0) == "Claude", tabs.tabText(0)
@@ -127,11 +136,9 @@ def test_the_library_populates_every_tab():
         try:
             window.refresh()
             assert window.voice_box.count() > 0, "no voices offered"
-            assert window.rules_table.rowCount() > 10, "pronunciation table empty"
             # History and bookmarks may legitimately be empty; the tables must
             # still exist and have their headers.
             assert window.history_table.columnCount() == 5
-            assert window.bookmark_table.columnCount() == 4
             # The Settings status must say where rule data came from, not just
             # which engines are ready. When shared/ is missing the app falls
             # back to built-in rules and otherwise says nothing about it.
@@ -416,7 +423,7 @@ def test_reading_now_reads_the_area_when_one_was_chosen():
             screen = tray.library.screen
             called = []
             screen.read_area_now = lambda: called.append("area")
-            app.read_screen = lambda scrolled=False: called.append("screen")
+            app.read_screen = lambda: called.append("screen")
 
             # No area yet: the whole display, as the button says.
             assert not screen.has_area()
@@ -623,6 +630,99 @@ def test_each_pane_converts_for_its_own_display():
     # A rectangle straddling the join appears on both.
     assert _touches((2400, 100, 400, 100), lg)
     assert _touches((2400, 100, 400, 100), samsung)
+
+
+def test_every_shortcut_in_the_settings_is_one_the_app_listens_for():
+    """A shortcut declared and never bound is a key that does nothing, and a
+    binding with no declaration can never fire. Removing the bookmark left
+    one of each behind until both sides were checked, and nothing was
+    checking."""
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.app import App
+    from executive_reader.config import Config
+    from executive_reader.ui.tray import TrayApp
+
+    declared = set(Config().hotkeys)
+    with own_data_dir():
+        app = App()
+        tray = TrayApp(app, qt)
+        try:
+            bound = tray.hotkeys.bound
+            assert declared, "no shortcuts declared at all"
+            assert "bookmark" not in declared, "the bookmark shortcut came back"
+            assert declared == bound, (
+                "declared and never bound: " + str(sorted(declared - bound))
+                + "; bound and never declared: " + str(sorted(bound - declared)))
+        finally:
+            tray.hotkeys.stop()
+            app.shutdown()
+            tray.tray.hide()
+
+
+def test_watching_a_window_survived_losing_its_tray_entries():
+    """It was two checkable entries in the tray and nobody ever used either.
+
+    Removing them without rehoming the setting would have taken the feature
+    with them, which is not what removing clutter means: a mode is a choice
+    between three things, so it is one control now, on the tab where reading
+    something that is not Claude lives.
+    """
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from executive_reader.app import App
+    from executive_reader.ui.screen_tab import ScreenTab
+
+    with own_data_dir():
+        app = App()
+        tab = ScreenTab(app)
+        try:
+            assert app.config.window_watch == "off"
+            modes = [tab.watch_mode.itemData(i)
+                     for i in range(tab.watch_mode.count())]
+            assert modes == ["off", "follow", "locked"], modes
+
+            tab.watch_mode.setCurrentIndex(modes.index("follow"))
+            assert app.config.window_watch == "follow"
+            tab.watch_mode.setCurrentIndex(modes.index("off"))
+            assert app.config.window_watch == "off"
+        finally:
+            app.set_window_watch("off")
+            tab.shutdown()
+            app.shutdown()
+
+
+def test_the_three_read_buttons_cover_the_routes_that_get_used():
+    """Six became three. Play and stop are on the player, which is on screen
+    whenever anything is being read, and reading the pixels is still the last
+    rung of the ladder the first button runs."""
+    qt = _qt()
+    if qt is None:
+        return SKIPPED
+    from PySide6.QtWidgets import QPushButton
+
+    from executive_reader.app import App
+    from executive_reader.ui.screen_tab import ScreenTab
+
+    with own_data_dir():
+        app = App()
+        tab = ScreenTab(app)
+        try:
+            labels = [b.text().split(chr(10))[0]
+                      for b in tab.findChildren(QPushButton)]
+            reads = [l for l in labels if l.startswith("Read ")]
+            assert "Read this window" in reads, reads
+            assert "Read what I highlighted" in reads, reads
+            assert "Read what I copied" in reads, reads
+            # Gone from the tab, and still reachable.
+            assert "Play or pause" not in labels, labels
+            assert "Stop" not in labels, labels
+            assert callable(app.read_screen)
+        finally:
+            tab.shutdown()
+            app.shutdown()
 
 
 # --- the command line ----------------------------------------------------

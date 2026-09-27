@@ -133,7 +133,7 @@ class TrayApp(QObject):
         if screen is not None and screen.has_area():
             screen.read_area_now()
             return
-        self.app.read_screen(False)
+        self.app.read_screen()
 
     def _choose_area(self) -> None:
         screen = getattr(self.library, "screen", None)
@@ -150,38 +150,22 @@ class TrayApp(QObject):
         self.app.set_speed(speed)
 
     # --- menu ------------------------------------------------------------
-    def _set_watch(self, mode: str) -> None:
-        self.app.set_window_watch(mode)
-        current = self.app.config.window_watch
-        # Set without re-firing: assigning checked emits triggered on some
-        # platforms, which would toggle the mode straight back off.
-        for action, name in ((self.act_follow, "follow"),
-                             (self.act_locked, "locked")):
-            action.blockSignals(True)
-            action.setChecked(current == name)
-            action.blockSignals(False)
-
     def _menu(self) -> QMenu:
+        """The tray menu: what you reach for without opening a window.
+
+        It had fifteen entries. Five were ways of reading that each have a
+        shortcut and a button on a tab, two were window-watch modes nobody
+        has ever switched on, and one saved a bookmark. Against three hundred
+        and eighty five readings, three hundred and sixty three of them
+        Claude, that is a menu describing the application rather than
+        offering the thing it does.
+
+        What is left is what has no other home: the Claude switch, the
+        transport, and the windows. Every route that lost an entry still has
+        its shortcut and its button.
+        """
         menu = QMenu()
-        menu.addAction("Read this window", self.app.read_smart)
-        menu.addAction("Read selection", self.app.read_selection)
-        menu.addAction("Read clipboard", self.app.read_clipboard)
-        menu.addAction("Read screen (OCR)", lambda: self.app.read_screen(False))
-        menu.addAction("Read screen, scrolling",
-                       lambda: self.app.read_screen(True))
-        menu.addSeparator()
-        # Checkable, and mutually exclusive, because the two modes answer
-        # different questions and having both on means nothing.
-        self.act_follow = menu.addAction("Watch: follow the front window")
-        self.act_follow.setCheckable(True)
-        self.act_follow.triggered.connect(
-            lambda on: self._set_watch("follow" if on else "off"))
-        self.act_locked = menu.addAction("Watch: lock to this window")
-        self.act_locked.setCheckable(True)
-        self.act_locked.triggered.connect(
-            lambda on: self._set_watch("locked" if on else "off"))
-        menu.addSeparator()
-        # The main job, reachable without opening anything.
+        # The main job, first, and reachable without opening anything.
         self.act_claude = menu.addAction("Read Claude's replies as they arrive")
         self.act_claude.setCheckable(True)
         self.act_claude.setChecked(bool(self.app.config.claude_watch))
@@ -191,7 +175,6 @@ class TrayApp(QObject):
         menu.addSeparator()
         menu.addAction("Play / pause", self.app.toggle)
         menu.addAction("Stop", self.app.stop)
-        menu.addAction("Bookmark here", lambda: self.app.bookmark())
         menu.addSeparator()
         menu.addAction("Show player", self._show_player)
         menu.addAction("Library and settings", self.show_library)
@@ -222,14 +205,13 @@ class TrayApp(QObject):
         actions = {
             "read_smart": self.app.read_smart,
             "read_clip": self.app.read_clipboard,
-            "read_ocr": lambda: self.app.read_screen(False),
+            "read_ocr": lambda: self.app.read_screen(),
             "play_pause": self.app.toggle,
             "stop": self.app.stop,
             "next_sent": self.app.next_segment,
             "prev_sent": self.app.prev_segment,
             "faster": self.app.faster,
             "slower": self.app.slower,
-            "bookmark": lambda: self.app.bookmark(),
         }
         for name, action in actions.items():
             spec = keys.get(name)

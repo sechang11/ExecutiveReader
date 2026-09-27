@@ -88,6 +88,17 @@ class Hotkeys:
             self._bindings[name] = (spec, action)
 
     @property
+    def bound(self) -> set:
+        """The shortcut names that were handed to this registry.
+
+        Public so the settings and the bindings can be checked against each
+        other. A name declared in the config and never bound is a key that
+        does nothing, and there is nothing on screen to say so.
+        """
+        with self._lock:
+            return set(self._bindings)
+
+    @property
     def failed(self) -> list[tuple[str, str]]:
         """Shortcuts another app already owns, as (name, spec) pairs."""
         return list(self._failed)

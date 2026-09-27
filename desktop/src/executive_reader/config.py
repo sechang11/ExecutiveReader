@@ -15,7 +15,7 @@ def data_dir() -> Path:
     """Settings, history and downloaded voices, all on this machine.
 
     Carries across the folder from the previous product name if one is there,
-    so renaming does not orphan an existing history, bookmarks and voice
+    so renaming does not orphan an existing history and voice
     downloads. Only ever runs once: after the move the old folder is gone.
     """
     base = Path(os.environ.get("APPDATA") or Path.home() / ".config")
@@ -95,7 +95,6 @@ class Config:
         "prev_sent":    "ctrl+alt+left",
         "faster":       "ctrl+alt+up",
         "slower":       "ctrl+alt+down",
-        "bookmark":     "ctrl+alt+b",
     })
 
     # --- ui ---

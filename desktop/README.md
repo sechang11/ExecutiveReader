@@ -192,7 +192,6 @@ seconds more.
 | Stop | Ctrl+Alt+X |
 | Previous or next sentence | Ctrl+Alt+Left / Right |
 | Faster or slower | Ctrl+Alt+Up / Down |
-| Bookmark here | Ctrl+Alt+B |
 
 Shortcuts another app already owns are reported in the Settings tab instead of
 failing silently. Edit them in `%APPDATA%\Earmark\config.json`.
@@ -202,7 +201,7 @@ failing silently. Edit them in `%APPDATA%\Earmark\config.json`.
 `%APPDATA%\Earmark\`, which keeps the old product name on purpose.
 
 The folder holds the settings file, the SQLite database with your reading
-history and bookmarks, and any downloaded voice models. Renaming it means moving
+history, and any downloaded voice models. Renaming it means moving
 a folder *and* the database file inside it, and getting only the folder right is
 how a previous rename here silently started a fresh, empty history while every
 test passed. The internal URI scheme is frozen for the same reason: it appears
@@ -212,18 +211,26 @@ If it is ever renamed, it needs the migration already in `config.py` and
 `store/db.py` rather than a search and replace, and it needs verifying against
 real data afterwards rather than against a fixture.
 
-## Resuming, bookmarks and history
+## Resuming and history
 
 Positions are stored as the sentence text plus surrounding context, not as an
 index, so they survive the document changing. Insert two paragraphs into a page
-and the bookmark still lands on the right sentence. Everything lives in one
-SQLite file at `%APPDATA%\Earmark\earmark.db`, on this machine only.
+and it still resumes on the right sentence. Everything lives in one SQLite file
+at `%APPDATA%\Earmark\earmark.db`, on this machine only.
+
+Bookmarks used to live beside this. After 385 readings the table held nothing,
+so the tab, the shortcut, the tray entry, the table and the three methods that
+touched it are gone. Resuming is a different thing and is untouched.
 
 ## Pronunciation
 
-The Pronunciation tab overrides how particular words are said. It ships with
-45 developer terms so nginx, PostgreSQL and Kubernetes come out right. This is
-the cheapest quality lever in the app.
+Particular words can be overridden, and 45 developer terms ship as defaults so
+nginx, PostgreSQL and Kubernetes come out right. This is the cheapest quality
+lever in the app and it still runs on every sentence.
+
+The screen for editing the list is gone: none of the 45 rules had ever been
+added to or changed. Edit them in `earmark.db` if you need to, or ask for the
+tab back.
 
 ## Shared rule data
 
@@ -264,7 +271,7 @@ desktop/
     tts/            SAPI, Kokoro, Piper behind one interface
     player/         playback thread, prefetch, speed, pause mid-sentence
     textproc/       normalisation, sentence splitting, pronunciation, symbols
-    store/          SQLite history and bookmarks, text-quote anchors
+    store/          SQLite history, text-quote anchors
     ui/             tray, mini player, library
   tests/            202 tests, no audio device needed
 ```
@@ -293,7 +300,7 @@ confirming the harness reports it, rather than by trusting a green result.
 |---|---|
 | `tools/conformance.mjs` | symbols, currency, abbreviation expansion |
 | `tools/conformance_segment.mjs` | where sentences begin and end |
-| `tools/conformance_anchor.mjs` | where a bookmark lands, and what it is called |
+| `tools/conformance_anchor.mjs` | where a saved position lands, and what it is called |
 
 The last two are new, and each found real disagreements on its first run. Both
 list the ones still outstanding in a `KNOWN` map inside the harness, with the
